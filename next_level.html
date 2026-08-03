@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>متحف الألغاز - نسخة الممر الأيمن فارغ مع الموسيقى والرسالة</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            width: 100%; height: 100%; margin: 0; padding: 0;
+            overflow: hidden; background-color: #0c0f17;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none; position: fixed;
+        }
+
+        #game-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10;
+        }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%;
+            width: 12px; height: 12px;
+            border: 2px solid #ff0000;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 200;
+            pointer-events: none;
+        }
+        #crosshair::after {
+            content: ''; position: absolute; top: 50%; left: 50%;
+            width: 2px; height: 2px; background: #ff0000;
+            border-radius: 50%; transform: translate(-50%, -50%);
+        }
+
+        #hearts-container {
+            position: absolute; top: 10px; left: 10px;
+            display: flex; gap: 4px; z-index: 150;
+        }
+        .ui-heart {
+            width: 14px; height: 14px; background-color: #ff0000;
+            clip-path: polygon(50% 15%, 65% 0, 85% 0, 100% 20%, 100% 40%, 50% 95%, 0 40%, 0 20%, 15% 0, 35% 0);
+        }
+
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 0, 0, 0.6); display: none; z-index: 300; pointer-events: none;
+        }
+
+        #instruction-bar {
+            position: absolute; top: 15px; right: 10px; width: 60%;
+            background: rgba(0, 0, 0, 0.9); border: 2px solid #ffd700;
+            border-radius: 6px; padding: 6px 10px; color: #ffd700; text-align: right;
+            font-size: 11px; font-weight: bold; z-index: 150; direction: rtl; line-height: 1.3;
+        }
+
+        #control-panel-right { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 160px; z-index: 130; }
+
+        .btn-wrapper {
+            position: absolute; width: 54px; height: 54px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        
+        #wrapper-jump { top: 0px; left: 53px; }
+        #wrapper-run { top: 50px; left: 0px; }
+        #wrapper-crouch { top: 50px; right: 0px; }
+        #wrapper-flashlight { bottom: 0px; left: 53px; }
+
+        .progress-ring {
+            position: absolute; top: 0; left: 0; width: 54px; height: 54px;
+            transform: rotate(-90deg); pointer-events: none;
+        }
+        .progress-ring__circle {
+            stroke-dasharray: 150.79; stroke-dashoffset: 0;
+            transition: stroke-dashoffset 0.1s linear, stroke 0.3s;
+        }
+
+        .control-btn {
+            width: 44px; height: 44px; background: rgba(0, 0, 0, 0.65);
+            border: 1.5px solid rgba(255, 255, 255, 0.3); border-radius: 50%;
+            color: #fff; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; touch-action: none; font-size: 18px; z-index: 5;
+        }
+        #crouch { border-color: #ffd700; }
+        #flashlight-btn { border-color: #ffeb3b; }
+        
+        #shoot-btn {
+            position: absolute; bottom: 15px; right: 190px; width: 58px; height: 58px;
+            background: rgba(220, 53, 69, 0.4); border: 2.5px solid #dc3545; border-radius: 50%;
+            color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 140; box-shadow: 0 0 10px #dc3545; touch-action: none;
+        }
+
+        #interact-btn {
+            position: absolute; top: 48px; left: 48px; width: 64px; height: 64px;
+            background: rgba(255, 215, 0, 0.2); border: 3px solid #ffd700; border-radius: 50%;
+            color: #ffd700; font-size: 22px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 140; box-shadow: 0 0 12px #ffd700; opacity: 0.3; pointer-events: none;
+        }
+        #interact-label { position: absolute; bottom: -14px; font-size: 9px; color: #ffd700; white-space: nowrap; font-weight: bold; text-align: center; width: 100%; left: 0; }
+
+        #joystick-container {
+            position: absolute; bottom: 25px; left: 25px; width: 120px; height: 120px;
+            background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3);
+            display: flex; align-items: center; justify-content: center; z-index: 130; touch-action: none; border-radius: 50%;
+        }
+        #joystick-knob { width: 50px; height: 50px; background: rgba(255, 255, 255, 0.4); border: 1.5px solid rgba(255, 255, 255, 0.7); border-radius: 50%; position: absolute; pointer-events: none; }
+
+        #gameover-black-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000000; display: none; z-index: 400; flex-direction: column; align-items: center; justify-content: center; }
+        #gameover-text { color: #dc3545; font-size: 48px; font-weight: bold; text-shadow: 0 0 20px #dc3545; }
+
+        /* شاشة البداية والرسالة الترحيبية */
+        #intro-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 15, 23, 0.95); z-index: 500;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: #ffd700; text-align: center; padding: 20px; direction: rtl;
+        }
+        #intro-box {
+            background: rgba(0, 0, 0, 0.85); border: 3px solid #ffd700; border-radius: 12px;
+            padding: 30px; max-width: 400px; width: 90%; box-shadow: 0 0 25px rgba(255, 215, 0, 0.4);
+        }
+        #intro-box h2 { margin-top: 0; color: #ffeb3b; font-size: 22px; }
+        #intro-box p { font-size: 14px; line-height: 1.6; color: #fff; margin-bottom: 25px; }
+        #start-game-btn {
+            background: #ffd700; color: #0c0f17; border: none; padding: 12px 30px;
+            font-size: 18px; font-weight: bold; border-radius: 8px; cursor: pointer;
+            box-shadow: 0 0 10px #ffd700; transition: 0.2s;
+        }
+        #start-game-btn:hover { background: #ffeb3b; transform: scale(1.05); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <audio id="bg-music" src="level_sound.mp3" loop preload="auto"></audio>
+
+    <div id="intro-overlay">
+        <div id="intro-box">
+            <h2>🔮 متحف الألغاز المرعب</h2>
+            <p>مرحباً بك أيها المغامر! استعد لخوض التجربة، خذ طاقة الكشاف لبدء الهجوم وتوجه بحرية نحو الممر الأيمن.</p>
+            <button id="start-game-btn">ابدأ المغامرة</button>
+        </div>
+    </div>
+
+    <div id="game-canvas"></div>
+    <div id="crosshair"></div>
+    <div id="damage-flash"></div>
+
+    <div id="hearts-container">
+        <div class="ui-heart" id="heart-1"></div>
+        <div class="ui-heart" id="heart-2"></div>
+        <div class="ui-heart" id="heart-3"></div>
+        <div class="ui-heart" id="heart-4"></div>
+        <div class="ui-heart" id="heart-5"></div>
+    </div>
+
+    <div id="instruction-bar">خذ طاقة الكشاف لبدء هجوم الحشرات السريع! ثم توجه للممر الأيمن بحريّة.</div>
+
+    <div id="gameover-black-screen"><div id="gameover-text">GAME OVER</div></div>
+
+    <div id="joystick-container"><div id="joystick-knob"></div></div>
+    
+    <div id="shoot-btn">💥</div>
+
+    <div id="control-panel-right">
+        <div class="btn-wrapper" id="wrapper-jump"><div class="control-btn" id="jump">🦘</div></div>
+        <div class="btn-wrapper" id="wrapper-run">
+            <svg class="progress-ring"><circle id="ring-stamina" class="progress-ring__circle" stroke="#4caf50" stroke-width="3" fill="transparent" r="24" cx="27" cy="27"/></svg>
+            <div class="control-btn" id="run">🏃</div>
+        </div>
+        <div class="btn-wrapper" id="wrapper-crouch"><div class="control-btn" id="crouch">⇩</div></div>
+        <div class="btn-wrapper" id="wrapper-flashlight">
+            <svg class="progress-ring"><circle id="ring-flashlight" class="progress-ring__circle" stroke="#ffeb3b" stroke-width="3" fill="transparent" r="24" cx="27" cy="27"/></svg>
+            <div class="control-btn" id="flashlight-btn">🔦</div>
+        </div>
+        <div id="interact-btn">✋<div id="interact-label">تفاعل</div></div>
+    </div>
+
+    <script>
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+        function initAudio() { if (!audioCtx) audioCtx = new AudioContext(); }
+
+        // تفعيل موسيقى MP3 ورسالة البداية عند الضغط على زر البدء
+        const startBtn = document.getElementById('start-game-btn');
+        const introOverlay = document.getElementById('intro-overlay');
+        const bgMusic = document.getElementById('bg-music');
+
+        startBtn.addEventListener('click', () => {
+            initAudio();
+            bgMusic.volume = 0.5;
+            bgMusic.play().catch(e => console.log("Audio play blocked:", e));
+            introOverlay.style.display = 'none';
+        });
+
+        function playTone(freq, type, duration, vol=0.2) {
+            if(!audioCtx) return; let osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            g.gain.setValueAtTime(vol, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+            osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playShotgunSound() { if(!audioCtx) return; playTone(120, 'sawtooth', 0.2, 0.5); playTone(60, 'sawtooth', 0.3, 0.4); }
+        function playHitSound() { if(!audioCtx) return; playTone(90, 'sawtooth', 0.3, 0.4); }
+        function playCollectTone() { if(!audioCtx) return; playTone(587.33, 'sine', 0.15, 0.3); playTone(1174.66, 'sine', 0.2, 0.2); }
+        
+        function playFootstepSound(vol = 0.1) {
+            if(!audioCtx) return;
+            playTone(75 + Math.random() * 15, 'triangle', 0.06, vol); 
+        }
+
+        function playRockRollingSound() {
+            if(!audioCtx) return;
+            playTone(55 + Math.random() * 25, 'sawtooth', 0.18, 0.18);
+            playTone(35 + Math.random() * 15, 'triangle', 0.22, 0.25);
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0a0d14); 
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 400);
+        camera.rotation.order = 'YXZ';
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('game-canvas').appendChild(renderer.domElement);
+
+        const clock = new THREE.Clock(); 
+        const raycaster = new THREE.Raycaster();
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6); scene.add(ambientLight);
+        const sunLight = new THREE.DirectionalLight(0xfff3e0, 0.4); sunLight.position.set(10, 50, -180); scene.add(sunLight);
+
+        const flashlight = new THREE.SpotLight(0xfff5db, 0, 60, Math.PI / 4, 0.5, 0.8); scene.add(flashlight);
+        const flashlightTarget = new THREE.Object3D(); scene.add(flashlightTarget); flashlight.target = flashlightTarget;
+
+        let hasShotgun = true; 
+        let hasUVUpgrade = false; 
+        let flashlightOn = false;
+        let flashlightEnergy = 60;
+        let flashlightRecharging = false;
+        let stamina = 60;
+        let staminaRecharging = false;
+        let colliders = []; 
+
+        let isVideoPlaying = false; 
+        let mummiesCanAttack = false; 
+        let footstepTimer = 0;
+
+        const smokeParticles = [];
+        const smokeGeo = new THREE.SphereGeometry(0.5, 5, 5);
+        const smokeMat = new THREE.MeshBasicMaterial({color: 0x555555, transparent: true, opacity: 0.6});
+
+        const museumGroup = new THREE.Group();
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x6e5b4f, roughness: 0.7 }); 
+        const innerWallMat = new THREE.MeshStandardMaterial({ color: 0x544032, roughness: 0.8 });
+
+        const leftOuterWall = new THREE.Mesh(new THREE.BoxGeometry(2, 25, 132), wallMat); leftOuterWall.position.set(-15, 12.5, -195); museumGroup.add(leftOuterWall);
+        const rightOuterWall = new THREE.Mesh(new THREE.BoxGeometry(2, 25, 132), wallMat); rightOuterWall.position.set(13.8, 12.5, -195); museumGroup.add(rightOuterWall);
+        const backOuterWall = new THREE.Mesh(new THREE.BoxGeometry(32, 25, 2), wallMat); backOuterWall.position.set(0, 12.5, -261); museumGroup.add(backOuterWall);
+
+        const upperFloorPlate = new THREE.Mesh(new THREE.BoxGeometry(32, 0.5, 132), new THREE.MeshStandardMaterial({color: 0x3b281e, roughness: 0.9}));
+        upperFloorPlate.position.set(0, 11, -195); museumGroup.add(upperFloorPlate);
+
+        for(let z = -130; z >= -248; z -= 16) {
+            let divBlock = new THREE.Mesh(new THREE.BoxGeometry(1.0, 15, 16), innerWallMat); 
+            divBlock.position.set(-1, 18.5, z - 8); 
+            if (z >= -230) { museumGroup.add(divBlock); colliders.push(new THREE.Box3().setFromObject(divBlock)); }
+            let leftBlock = new THREE.Mesh(new THREE.BoxGeometry(1.5, 15, 6), innerWallMat);
+            leftBlock.position.set(-14.2, 18.5, z - 4.5); museumGroup.add(leftBlock); colliders.push(new THREE.Box3().setFromObject(leftBlock));
+        }
+
+        const lastTunnelZ = -240; 
+        const tunnelPositionsZ = [-145, -165, -185, -205, -225, lastTunnelZ];
+        let tunnelMat = new THREE.MeshBasicMaterial({color: 0x110500});
+        for(let z of tunnelPositionsZ) {
+            let tunnel = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 1, 12), tunnelMat);
+            tunnel.rotation.z = Math.PI / 2; tunnel.position.set(-12.5, 11.6, z); museumGroup.add(tunnel);
+        }
+
+        const uvOrbGroup = new THREE.Group(); uvOrbGroup.position.set(-11, 12.5, -134);
+        let orbSphere = new THREE.Mesh(new THREE.SphereGeometry(0.5, 16, 16), new THREE.MeshBasicMaterial({color: 0x9933ff}));
+        let orbRing = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.08, 6, 24), new THREE.MeshBasicMaterial({color: 0xcc99ff}));
+        orbRing.rotation.x = Math.PI / 2; uvOrbGroup.add(orbSphere, orbRing); scene.add(uvOrbGroup);
+
+        let bugsArray = [];
+        let bugsSpawnedCount = 0;
+        const maxBugsTotal = 60; 
+        const maxSimultaneousBugs = 45; 
+        let bugGeo = new THREE.SphereGeometry(0.25, 8, 8);
+        let bugMat = new THREE.MeshBasicMaterial({color: 0x33ff33});
+
+        function fillBugsWave() {
+            if (!hasUVUpgrade || gameState !== "explore_museum_second_floor" || isVideoPlaying) return;
+            if (bugsArray.length < maxSimultaneousBugs && bugsSpawnedCount < maxBugsTotal) {
+                let bug = new THREE.Mesh(bugGeo, bugMat);
+                bug.position.set(-12.5 + (Math.random()*0.4 - 0.2), 11.3, lastTunnelZ);
+                bug.userData = { type: 'bug' };
+                scene.add(bug);
+                bugsArray.push(bug);
+                bugsSpawnedCount++;
+            }
+        }
+        let bugSpawnerInterval = null;
+
+        let mummiesArray = []; 
+        function initMummies() {
+            for(let m of mummiesArray) scene.remove(m);
+            mummiesArray = [];
+        }
+        initMummies();
+
+        let boulderGeo = new THREE.SphereGeometry(6.5, 24, 24); let boulderMat = new THREE.MeshStandardMaterial({color: 0x333333, roughness: 1.0});
+        let boulders = [];
+        setInterval(() => {
+            if(hasUVUpgrade && gameState === "explore_museum_second_floor" && !isVideoPlaying) {
+                let bMesh = new THREE.Mesh(boulderGeo, boulderMat); bMesh.position.set(-7.2, 14.2, -250); scene.add(bMesh); boulders.push(bMesh);
+            }
+        }, 5000);
+
+        scene.add(museumGroup); museumGroup.updateMatrixWorld(true);
+        colliders.push(new THREE.Box3().setFromObject(rightOuterWall), new THREE.Box3().setFromObject(backOuterWall));
+
+        const spawnPoint = new THREE.Vector3(-8, 12.6, -131);
+        let player = { position: spawnPoint.clone(), pitch: 0, yaw: Math.PI, radius: 0.4, velocityY: 0, isGrounded: true }; 
+        camera.position.copy(player.position);
+
+        let playerHearts = 5; let damageTimeout = 0;
+
+        function updateHeartsUI() {
+            for(let i=1; i<=5; i++) {
+                const hNode = document.getElementById('heart-' + i);
+                if(hNode) hNode.style.display = (i <= playerHearts) ? 'block' : 'none';
+            }
+        }
+        updateHeartsUI();
+
+        function handlePlayerHit(heartDamage) {
+            playHitSound(); 
+            playerHearts -= heartDamage; 
+            updateHeartsUI();
+            document.getElementById('damage-flash').style.display = 'block';
+            setTimeout(() => { document.getElementById('damage-flash').style.display = 'none'; }, 200);
+            
+            if (playerHearts <= 0) {
+                gameState = "game_over_forever"; 
+                document.getElementById('gameover-black-screen').style.display = "flex"; 
+                setTimeout(() => { window.location.href = "index.html"; }, 5000);
+                return;
+            }
+
+            player.position.copy(spawnPoint); player.velocityY = 0; player.yaw = Math.PI; player.pitch = 0;
+            damageTimeout = 1.2; 
+            hasUVUpgrade = false;
+            mummiesCanAttack = false;
+            if(bugSpawnerInterval) { clearInterval(bugSpawnerInterval); bugSpawnerInterval = null; }
+            museumGroup.visible = true;
+            scene.add(uvOrbGroup); 
+            flashlightOn = false;
+            flashlight.intensity = 0;
+            document.getElementById('ring-flashlight').setAttribute('stroke', '#ffeb3b');
+
+            for(let b of bugsArray) scene.remove(b);
+            bugsArray = [];
+            bugsSpawnedCount = 0;
+
+            initMummies();
+            const instBar = document.getElementById('instruction-bar');
+            instBar.innerHTML = "🔄 عدت للسلم! خذ الكشاف لبدء هجوم الحشرات!";
+        }
+
+        let gameState = "explore_museum_second_floor"; let closestInteractable = null;
+
+        function setRingProgress(elementId, current, max) {
+            const circle = document.getElementById(elementId); if(!circle) return;
+            const radius = circle.r.baseVal.value; const circumference = 2 * Math.PI * radius;
+            const percent = (current / max) * 100; const offset = circumference - (percent / 100) * circumference;
+            circle.style.strokeDashoffset = offset;
+        }
+
+        const shootBtn = document.getElementById('shoot-btn');
+        shootBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault(); if(!hasShotgun || isVideoPlaying) return;
+            playShotgunSound();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            let targets = [...bugsArray];
+            let intersects = raycaster.intersectObjects(targets, true);
+
+            if(intersects.length > 0) {
+                let hitObject = intersects[0].object;
+                let mainObj = hitObject;
+                while(mainObj.parent && mainObj.parent !== scene && mainObj.parent.type === "Group") {
+                    mainObj = mainObj.parent;
+                }
+                if(bugsArray.includes(mainObj) || mainObj.userData.type === 'bug') {
+                    scene.remove(mainObj);
+                    let index = bugsArray.indexOf(mainObj);
+                    if(index > -1) bugsArray.splice(index, 1);
+                    playTone(400, 'sine', 0.1, 0.2);
+                }
+            }
+        });
+
+        document.getElementById('flashlight-btn').addEventListener('touchstart', (e) => { 
+            e.preventDefault(); if(flashlightRecharging || isVideoPlaying) return;
+            flashlightOn = !flashlightOn; flashlight.intensity = flashlightOn ? 7 : 0; 
+            if(flashlightOn) flashlight.color.setHex(hasUVUpgrade ? 0xb366ff : 0xfff5db);
+        });
+
+        const container = document.getElementById('joystick-container'); const knob = document.getElementById('joystick-knob');
+        let moveX = 0, moveZ = 0; let joystickTouchId = null; let lookTouchId = null; let prevLookX = 0, prevLookY = 0;
+
+        window.addEventListener('touchstart', (e) => {
+            if(isVideoPlaying) return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let touch = e.changedTouches[i];
+                if (document.getElementById('control-panel-right').contains(touch.target) || touch.target === shootBtn) continue;
+                if (touch.clientX < window.innerWidth / 2) {
+                    const rect = container.getBoundingClientRect();
+                    if (touch.clientX >= rect.left - 20 && touch.clientX <= rect.right + 20 && touch.clientY >= rect.top - 20 && touch.clientY <= rect.bottom + 20) { joystickTouchId = touch.identifier; }
+                    else { if (lookTouchId === null) { lookTouchId = touch.identifier; prevLookX = touch.clientX; prevLookY = touch.clientY; } }
+                } else { if (lookTouchId === null) { lookTouchId = touch.identifier; prevLookX = touch.clientX; prevLookY = touch.clientY; } }
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if(isVideoPlaying) return;
+            for (let i = 0; i < e.touches.length; i++) {
+                let touch = e.touches[i];
+                if (touch.identifier === joystickTouchId) {
+                    const rect = container.getBoundingClientRect(); const cX = rect.left + rect.width/2, cY = rect.top + rect.height/2;
+                    let dX = touch.clientX - cX, dY = touch.clientY - cY; let dist = Math.sqrt(dX*dX + dY*dY); const maxR = rect.width/2 - 10;
+                    if (dist > maxR) { dX = (dX / dist) * maxR; dY = (dY / dist) * maxR; }
+                    knob.style.transform = `translate(${dX}px, ${dY}px)`; moveX = dX / maxR; moveZ = dY / maxR;
+                } else if (touch.identifier === lookTouchId) {
+                    player.yaw -= (touch.clientX - prevLookX) * 0.005; player.pitch -= (touch.clientY - prevLookY) * 0.004;
+                    player.pitch = Math.max(-1.3, Math.min(1.3, player.pitch)); prevLookX = touch.clientX; prevLookY = touch.clientY;
+                }
+            }
+        });
+
+        window.addEventListener('touchend', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let touch = e.changedTouches[i];
+                if (touch.identifier === joystickTouchId) { joystickTouchId = null; moveX = 0; moveZ = 0; knob.style.transform = 'translate(0px,0px)'; }
+                else if (touch.identifier === lookTouchId) { lookTouchId = null; }
+            }
+        });
+
+        let isRunning = false, isCrouching = false;
+        document.getElementById('jump').addEventListener('touchstart', (e) => { e.preventDefault(); if(!isVideoPlaying && player.isGrounded) { player.velocityY = 11.5; player.isGrounded = false; } });
+        document.getElementById('run').addEventListener('touchstart', (e) => { e.preventDefault(); if(!isVideoPlaying && !staminaRecharging) isRunning = true; });
+        document.getElementById('run').addEventListener('touchend', (e) => { e.preventDefault(); isRunning = false; });
+        document.getElementById('crouch').addEventListener('touchstart', (e) => { e.preventDefault(); if(!isVideoPlaying) { isCrouching = !isCrouching; player.position.y = isCrouching ? 11.7 : 12.6; } });
+
+        const interactBtn = document.getElementById('interact-btn'); const instBar = document.getElementById('instruction-bar');
+
+        interactBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault(); if (!closestInteractable || isVideoPlaying) return;
+            if (closestInteractable.type === 'upgrade_uv') {
+                hasUVUpgrade = true; scene.remove(uvOrbGroup);
+                document.getElementById('ring-flashlight').setAttribute('stroke', '#b366ff');
+                if(flashlightOn) flashlight.color.setHex(0xb366ff);
+                bugSpawnerInterval = setInterval(fillBugsWave, 50);
+                instBar.innerHTML = "⚡ الحشرات تندفع بـ زحمة مرعبة! يمكنك الآن استكشاف الممر الأيمن الفارغ تماماً.";
+                playCollectTone();
+            }
+        });
+
+        function animate() {
+            if (gameState === "game_over_forever") { requestAnimationFrame(animate); renderer.render(scene, camera); return; }
+            
+            if (gameState === "victory_screen") {
+                requestAnimationFrame(animate);
+                const dt = Math.min(clock.getDelta(), 0.03);
+                museumGroup.position.y -= 2.0 * dt;
+                museumGroup.position.x = Math.sin(clock.getElapsedTime() * 35) * 0.3;
+                camera.position.set(7, 11.5, -135); 
+                camera.lookAt(new THREE.Vector3(7, 18, -145));
+
+                if(Math.random() < 0.4) {
+                    const p = new THREE.Mesh(smokeGeo, smokeMat.clone());
+                    p.position.set(4 + Math.random()*6, 11.0, -140 - Math.random()*10);
+                    scene.add(p); smokeParticles.push(p);
+                }
+                for(let i = smokeParticles.length - 1; i >= 0; i--) {
+                    let p = smokeParticles[i]; p.position.y += 4 * dt; p.material.opacity -= 0.3 * dt;
+                    if(p.material.opacity <= 0) { scene.remove(p); smokeParticles.splice(i, 1); }
+                }
+                renderer.render(scene, camera); 
+                return; 
+            }
+
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.03);
+
+            if(isVideoPlaying) { renderer.render(scene, camera); return; }
+
+            if(!hasUVUpgrade) { uvOrbGroup.rotation.y += 2 * dt; orbSphere.position.y = Math.sin(clock.getElapsedTime() * 3) * 0.15; }
+
+            if (flashlightOn) {
+                flashlightEnergy -= dt; if (flashlightEnergy <= 0) { flashlightEnergy = 0; flashlightOn = false; flashlight.intensity = 0; flashlightRecharging = true; document.getElementById('ring-flashlight').setAttribute('stroke', '#ff5722'); }
+            } else {
+                flashlightEnergy += dt; if (flashlightEnergy >= 60) { flashlightEnergy = 60; flashlightRecharging = false; document.getElementById('ring-flashlight').setAttribute('stroke', hasUVUpgrade ? "#b366ff" : "#ffeb3b"); }
+            }
+            setRingProgress('ring-flashlight', flashlightEnergy, 60);
+
+            if (isRunning && (moveX !== 0 || moveZ !== 0)) {
+                stamina -= dt; if (stamina <= 0) { stamina = 0; isRunning = false; staminaRecharging = true; document.getElementById('ring-stamina').setAttribute('stroke', '#ff5722'); }
+            } else {
+                stamina += dt; if (stamina >= 60) { stamina = 60; staminaRecharging = false; document.getElementById('ring-stamina').setAttribute('stroke', '#4caf50'); }
+            }
+            setRingProgress('ring-stamina', stamina, 60);
+
+            if(damageTimeout > 0) damageTimeout -= dt;
+
+            for(let i = boulders.length - 1; i >= 0; i--) {
+                let b = boulders[i]; b.position.z += 9.5 * dt; b.rotation.x += 2.2 * dt;
+                if (Math.random() < 0.12) { playRockRollingSound(); }
+                if (damageTimeout <= 0 && b.position.distanceTo(player.position) < 6.8) { scene.remove(b); boulders.splice(i, 1); handlePlayerHit(1); continue; }
+                if (b.position.z > -120) { scene.remove(b); boulders.splice(i, 1); }
+            }
+
+            if (hasUVUpgrade) {
+                for(let i = bugsArray.length - 1; i >= 0; i--) {
+                    let bug = bugsArray[i]; let dist = bug.position.distanceTo(player.position);
+                    let isBurnedByLight = false;
+                    
+                    if(flashlightOn) {
+                        let vBug = bug.position.clone().sub(player.position).normalize();
+                        let vCam = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
+                        if(vBug.dot(vCam) > 0.85 && dist < 18) isBurnedByLight = true;
+                    }
+                    
+                    if(isBurnedByLight) { 
+                        scene.remove(bug); 
+                        bugsArray.splice(i, 1); 
+                        playTone(450, 'sine', 0.1, 0.15); 
+                        continue; 
+                    }
+                    
+                    bug.position.x = THREE.MathUtils.lerp(bug.position.x, player.position.x, dt * 1.3);
+                    bug.position.z = THREE.MathUtils.lerp(bug.position.z, player.position.z, dt * 1.3);
+                    
+                    if (dist < 2.2 && damageTimeout <= 0) { handlePlayerHit(1); }
+                }
+            }
+
+            let baseFloorLevel = isCrouching ? 11.7 : 12.6;
+            player.velocityY -= 35.0 * dt; player.position.y += player.velocityY * dt;
+            if (player.position.y <= baseFloorLevel) { player.position.y = baseFloorLevel; player.velocityY = 0; player.isGrounded = true; }
+
+            let moveSpeed = isRunning ? 7.0 : 4.2; if (isCrouching) moveSpeed = 2.0;
+            camera.rotation.x = player.pitch; camera.rotation.y = player.yaw;
+
+            if (moveX !== 0 || moveZ !== 0) {
+                let dirX = Math.sin(player.yaw) * moveZ + Math.sin(player.yaw - Math.PI/2) * -moveX;
+                let dirZ = Math.cos(player.yaw) * moveZ + Math.cos(player.yaw - Math.PI/2) * -moveX;
+                let nextX = player.position.x + dirX * moveSpeed * dt; let nextZ = player.position.z + dirZ * moveSpeed * dt;
+                let canMoveX = true, canMoveZ = true;
+                let tBoxX = new THREE.Box3(new THREE.Vector3(nextX - player.radius, player.position.y - 1.2, player.position.z - player.radius), new THREE.Vector3(nextX + player.radius, player.position.y + 1.2, player.position.z + player.radius));
+                for (let i = 0; i < colliders.length; i++) { if (tBoxX.intersectsBox(colliders[i])) { canMoveX = false; break; } }
+                let tBoxZ = new THREE.Box3(new THREE.Vector3(player.position.x - player.radius, player.position.y - 1.2, nextZ - player.radius), new THREE.Vector3(player.position.x + player.radius, player.position.y + 1.2, nextZ + player.radius));
+                for (let i = 0; i < colliders.length; i++) { if (tBoxZ.intersectsBox(colliders[i])) { canMoveZ = false; break; } }
+                if (nextX < -14.5 || nextX > 12.5) canMoveX = false; if (nextZ < -258.0 || nextZ > -131.0) canMoveZ = false;
+                if (canMoveX) player.position.x = nextX; if (canMoveZ) player.position.z = nextZ;
+
+                if (player.isGrounded) {
+                    footstepTimer += dt;
+                    let stepInterval = isRunning ? 0.22 : 0.38;
+                    if (footstepTimer >= stepInterval) {
+                        playFootstepSound(isRunning ? 0.2 : 0.12);
+                        footstepTimer = 0;
+                    }
+                }
+            } else {
+                footstepTimer = 0;
+            }
+            
+            camera.position.copy(player.position);
+            flashlight.position.copy(player.position);
+            flashlightTarget.position.set(player.position.x - Math.sin(player.yaw)*5, player.position.y + Math.sin(player.pitch)*5, player.position.z - Math.cos(player.yaw)*5);
+
+            closestInteractable = null;
+            if(!hasUVUpgrade && player.position.distanceTo(uvOrbGroup.position) < 2.5) closestInteractable = { type: 'upgrade_uv', label: '🔮 طاقة الكشاف البنفسجي!' };
+
+            if (closestInteractable) {
+                interactBtn.style.opacity = "1"; interactBtn.style.pointerEvents = "auto"; document.getElementById('interact-label').innerHTML = closestInteractable.label;
+            } else {
+                interactBtn.style.opacity = "0.3"; interactBtn.style.pointerEvents = "none"; document.getElementById('interact-label').innerHTML = 'تفاعل';
+            }
+
+            // ---- الشرط الثاني (الانتقال عند المشي في الممر الأيمن) ----
+            let isMoving = (moveX !== 0 || moveZ !== 0);
+            if (player.position.x > 4.0 && isMoving) {
+                bgMusic.pause();
+                window.location.href = "nextlevel.html";
+            }
+
+            renderer.render(scene, camera);
+        }
+        
+        clock.start(); animate();
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    </script>
+</body>
+</html>

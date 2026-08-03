@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bandi's Journey - Grand Intro Ultimate Edition</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        html, body {
+            margin: 0; padding: 0; overflow: hidden;
+            width: 100%; height: 100%; background-color: #050515;
+            font-family: Arial, sans-serif; touch-action: none;
+        }
+        canvas { display: block; width: 100vw; height: 100vh; }
+        
+        #language-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #050515; z-index: 999999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            color: #ffffff; text-align: center; font-size: 24px; font-weight: bold;
+        }
+        .lang-btn {
+            background-color: #ff1744; color: white; border: 2px solid white;
+            padding: 15px 40px; font-size: 20px; font-weight: bold; margin: 10px;
+            border-radius: 5px; cursor: pointer; min-width: 180px; box-shadow: 0 4px 15px rgba(255,23,68,0.4);
+        }
+
+        #orientation-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #050515; z-index: 999998;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            color: #ffffff; text-align: center; font-size: 22px; font-weight: bold;
+            padding: 30px; box-sizing: border-box;
+        }
+        #force-bypass-btn {
+            background-color: #304ffe; color: #fff; border: none; padding: 10px 20px;
+            font-size: 16px; font-weight: bold; margin-top: 20px; border-radius: 4px; cursor: pointer;
+        }
+
+        #start-btn {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background-color: #ff1744; color: #ffffff; border: 2px solid #ffffff;
+            padding: 16px 50px; font-size: 24px; font-weight: bold; border-radius: 4px; 
+            z-index: 99997; cursor: pointer; box-shadow: 0 6px 25px rgba(255,23,68,0.7);
+            display: none; 
+        }
+
+        #loading-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #050515; z-index: 99996; display: none; 
+            flex-direction: column; justify-content: center; align-items: center;
+            opacity: 1; transition: opacity 0.4s ease;
+        }
+        #loading-text { color: #ffffff; font-size: 24px; font-weight: bold; }
+
+        #story-ui {
+            position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%);
+            width: 85%; max-width: 600px;
+            background: transparent; border: none; 
+            z-index: 10; padding: 10px; 
+            cursor: pointer; display: none; user-select: none; box-sizing: border-box;
+            text-align: center;
+        }
+        #speaker-name { font-size: 16px; font-weight: bold; margin-bottom: 6px; text-shadow: 2px 2px 4px #000000; }
+        #story-text { margin: 0; font-size: 16px; font-weight: bold; color: #ffffff; line-height: 1.5; text-shadow: 2px 2px 4px #000000; min-height: 45px; }
+    </style>
+</head>
+<body>
+
+    <div id="language-screen">
+        <p style="margin-bottom: 20px;">اختر لغة اللعبة / Select Game Language</p>
+        <button class="lang-btn" onclick="selectLanguage('ar')">العربية (Arabic)</button>
+        <button class="lang-btn" onclick="selectLanguage('en')">English</button>
+    </div>
+
+    <div id="orientation-screen">
+        <div id="orient-msg">يرجى تدوير الهاتف للوضع الأفقي!</div>
+        <button id="force-bypass-btn" onclick="bypassOrientation()">Bypass / تخطي</button>
+    </div>
+
+    <button id="start-btn" onclick="startTheGame()">ابدأ اللعب / Start</button>
+
+    <div id="loading-screen">
+        <div id="loading-text">Loading...</div>
+    </div>
+
+    <div id="story-ui">
+        <div id="speaker-name"></div>
+        <p id="story-text"></p>
+    </div>
+    
+    <script>
+        let gameLang = 'ar'; 
+        let scene, camera, renderer, isStarted = false, currentSceneId = 1;
+        let houseGroup, car, valleyGroup, tutTomb, tutMummy, sandParticles, tearGroup, leftTear, rightTear;
+        let vBandi, vJoana, bBandi, bJoana, carBandi, carJoana;
+        let multipleTombs = []; 
+        let rainParticles, ambientLight, sunLight; 
+        let mainMeteor, splitMeteors = [], meteorHasSplit = false;
+        const colorBandi = 0x0066ff, colorJoana = 0x9c27b0; 
+
+        let scene1SubStep = 1; 
+        let scene3SubStep = 1; 
+        let scene4SubStep = 1; 
+        let audioCtx, engineOsc, engineGain, windNoiseNode, cryInterval, lightningTimeout;
+        let typeTimeout = null; 
+        let isTyping = false;
+        let isLightningActive = false;
+
+        const translations = {
+            ar: {
+                loading: "جاري تشغيل نظام السمعيات والبصريات المتكامل للسينما...",
+                orient: "يرجى تدوير الهاتف للوضع الأفقي للعب!",
+                bypass: "لقد قمت بقلب الهاتف بالفعل (اضغط هنا)",
+                startBtn: "ابدأ اللعب",
+                joanaName: "منى",
+                bandiName: "أحمد",
+                d1: "انظر يا أخي! ما هذا الذي يلمع هناك في أعالي السماء؟! ",
+                d2: "هذا نيزك ملتهب! يا إلهي.. لقد انقسم إلى أكثر من جزء!",
+                d3: "هيا بنا سريعاً دون تردد، لنلحق بمكان سقوط تلك الأجزاء ونكتشف الأمر!",
+                d4: "النيازك سقطت في وادي الملوك! بسرعة! بسرعة بالسيارة الجيب!",
+                s3_1: "أنا خايفة جداً يا أحمد! النيازك دي شكلها مرعب سقطت في وادي الملوك!",
+                s3_2: "لا تخافي يا أختي، أنا معكِ! تمسكي جيداً.. بسرعة، بسرعة بالسيارة الجيب!",
+                s4_1: "انظر يا أحمد، أكل هذه توابيت?!", 
+                s4_2: "نعم يا أختي، هذه توابيت أجدادنا الفراعنة القدماء.. علينا الحذر الشديد هنا!", 
+                s5_1: "أنا أسمع صوتاً غريباً يقترب من التابوت الرئيسي!", 
+                s5_2: "المومياء صحيت!",
+                s8: "سأنقذكِ يا أختي! 😭💔"
+            },
+            en: {
+                loading: "Loading cinematic immersive audio & visuals...",
+                orient: "Please rotate your device to landscape mode!",
+                bypass: "I already rotated my phone (Click here)",
+                startBtn: "Start Game",
+                joanaName: "Mona",
+                bandiName: "Ahmed",
+                d1: "Look, brother! What is that shining high up in the sky?!",
+                d2: "It's a flaming meteor! Oh my god.. it has split into multiple parts!",
+                d3: "Let's go quickly without hesitation to find where those parts landed!",
+                d4: "The meteors crashed in the Valley of the Kings! Quickly! Quickly with the Jeep!",
+                s3_1: "I am so scared, Ahmed! Those meteors look terrifying falling into the valley!",
+                s3_2: "Don't be afraid, sister, I am with you! Hold on tight.. quickly, quickly with the Jeep!",
+                s4_1: "Look Ahmed, are all these coffins?!",
+                s4_2: "Yes sister, these are the tombs of our ancient Pharaoh ancestors.. We must be careful!",
+                s5_1: "I hear a strange sound coming from the main tomb!",
+                s5_2: "The mummy has awakened!",
+                s8: "I will save you, sister! 😭💔"
+            }
+        };
+
+        function selectLanguage(lang) {
+            gameLang = lang;
+            document.getElementById("language-screen").style.display = "none";
+            document.getElementById("orient-msg").innerText = translations[gameLang].orient;
+            document.getElementById("force-bypass-btn").innerText = translations[gameLang].bypass;
+            document.getElementById("start-btn").innerText = translations[gameLang].startBtn;
+            document.getElementById("loading-text").innerText = translations[gameLang].loading;
+            document.getElementById("story-ui").style.direction = (lang === 'ar') ? 'rtl' : 'ltr';
+            document.getElementById("orientation-screen").style.direction = (lang === 'ar') ? 'rtl' : 'ltr';
+            checkOrientation();
+        }
+
+        function initAudioEngine() {
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (AudioContext) audioCtx = new AudioContext();
+            } catch(e) { console.log("Audio API not supported"); }
+        }
+
+        function playBlipSound(character) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            if (character === "joana") { osc.frequency.setValueAtTime(550, audioCtx.currentTime); osc.type = 'triangle'; }
+            else if (character === "bandi") { osc.frequency.setValueAtTime(230, audioCtx.currentTime); osc.type = 'sawtooth'; }
+            else if (character === "sad_bandi") { osc.frequency.setValueAtTime(140, audioCtx.currentTime); osc.type = 'sine'; }
+            else { osc.frequency.setValueAtTime(320, audioCtx.currentTime); osc.type = 'sine'; }
+            gainNode.gain.setValueAtTime(character === "sad_bandi" ? 0.04 : 0.06, audioCtx.currentTime); 
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + (character === "sad_bandi" ? 0.15 : 0.05)); 
+            osc.connect(gainNode); gainNode.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        function playStoneMovingSound() {
+            if (!audioCtx) return;
+            for (let i = 0; i < 3; i++) {
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(90 + (i * 35), audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(45, audioCtx.currentTime + 1.2);
+                const filter = audioCtx.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.setValueAtTime(180, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime); gainNode.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+                osc.connect(filter); filter.connect(gainNode); gainNode.connect(audioCtx.destination);
+                osc.start(); osc.stop(audioCtx.currentTime + 1.2);
+            }
+        }
+
+        function startWindStormSound() {
+            if (!audioCtx || windNoiseNode) return;
+            const bufferSize = 2 * audioCtx.sampleRate, noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), output = noiseBuffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; }
+            const whiteNoise = audioCtx.createBufferSource(); whiteNoise.buffer = noiseBuffer; whiteNoise.loop = true;
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(400, audioCtx.currentTime);
+            windNoiseNode = audioCtx.createGain(); windNoiseNode.gain.setValueAtTime(0.0, audioCtx.currentTime); windNoiseNode.gain.linearRampToValueAtTime(0.4, audioCtx.currentTime + 1.5); 
+            whiteNoise.connect(filter); filter.connect(windNoiseNode); windNoiseNode.connect(audioCtx.destination);
+            whiteNoise.start();
+            triggerLightningAndThunder();
+        }
+
+        function triggerLightningAndThunder() {
+            if (currentSceneId !== 5 && currentSceneId !== 7) return;
+            isLightningActive = true;
+            ambientLight.intensity = 5.0; 
+            if (audioCtx) {
+                const now = audioCtx.currentTime;
+                const thunderOsc = audioCtx.createOscillator(); const thunderGain = audioCtx.createGain();
+                thunderOsc.type = 'sawtooth'; thunderOsc.frequency.setValueAtTime(75, now); thunderOsc.frequency.linearRampToValueAtTime(25, now + 1.6);
+                thunderGain.gain.setValueAtTime(0.8, now); thunderGain.gain.exponentialRampToValueAtTime(0.001, now + 1.6);
+                thunderOsc.connect(thunderGain); thunderGain.connect(audioCtx.destination);
+                thunderOsc.start(now); thunderOsc.stop(now + 1.6);
+            }
+            setTimeout(() => { 
+                ambientLight.intensity = 0.65; 
+                isLightningActive = false; 
+            }, 100);
+            lightningTimeout = setTimeout(triggerLightningAndThunder, 3000 + Math.random() * 2500);
+        }
+
+        function playJoanaScreamSound() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(850, now);
+            osc.frequency.linearRampToValueAtTime(1250, now + 0.3);
+            osc.frequency.linearRampToValueAtTime(700, now + 0.8);
+            gain.gain.setValueAtTime(0.5, now); gain.gain.linearRampToValueAtTime(0.4, now + 0.5); gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(now); osc.stop(now + 0.8);
+        }
+
+        function stopWindStormSound() {
+            clearTimeout(lightningTimeout);
+            if (windNoiseNode) {
+                windNoiseNode.gain.linearRampToValueAtTime(0.0, audioCtx.currentTime + 0.5);
+                setTimeout(() => { if(windNoiseNode) { windNoiseNode.disconnect(); windNoiseNode = null; } }, 600);
+            }
+        }
+
+        function startCryingSound() {
+            if (!audioCtx) return;
+            cryInterval = setInterval(() => {
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(380, now);
+                osc.frequency.linearRampToValueAtTime(320, now + 0.15); osc.frequency.linearRampToValueAtTime(350, now + 0.3); osc.frequency.linearRampToValueAtTime(150, now + 0.5);
+                gain.gain.setValueAtTime(0.0, now); gain.gain.linearRampToValueAtTime(0.18, now + 0.1); gain.gain.linearRampToValueAtTime(0.05, now + 0.3); gain.gain.linearRampToValueAtTime(0.0, now + 0.5);
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.start(now); osc.stop(now + 0.5);
+            }, 850);
+        }
+
+        function stopCryingSound() { if(cryInterval) clearInterval(cryInterval); }
+
+        function typeWriterEffect(text, character) {
+            isTyping = true; clearTimeout(typeTimeout);
+            const textElement = document.getElementById("story-text"); textElement.innerText = "";
+            const words = text.split(" "); let index = 0;
+            function typeNextWord() {
+                if (index < words.length) {
+                    textElement.innerText += (index === 0 ? "" : " ") + words[index];
+                    playBlipSound(character); index++; typeTimeout = setTimeout(typeNextWord, character === "sad_bandi" ? 400 : 280); 
+                } else { isTyping = false; }
+            }
+            typeNextWord();
+        }
+
+        function playExplosionSound() {
+            if (!audioCtx) return;
+            const osc1 = audioCtx.createOscillator(); const gain1 = audioCtx.createGain();
+            osc1.type = 'sawtooth'; osc1.frequency.setValueAtTime(180, audioCtx.currentTime); osc1.frequency.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.8);
+            const osc2 = audioCtx.createOscillator(); const gain2 = audioCtx.createGain();
+            osc2.type = 'triangle'; osc2.frequency.setValueAtTime(90, audioCtx.currentTime); osc2.frequency.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(450, audioCtx.currentTime);
+            gain1.gain.setValueAtTime(0.8, audioCtx.currentTime); gain1.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 1.8);
+            gain2.gain.setValueAtTime(0.8, audioCtx.currentTime); gain2.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
+            osc1.connect(filter); osc2.connect(filter); filter.connect(gain1); filter.connect(gain2);
+            gain1.connect(audioCtx.destination); gain2.connect(audioCtx.destination);
+            osc1.start(); osc2.start(); osc1.stop(audioCtx.currentTime + 1.8); osc2.stop(audioCtx.currentTime + 1.5);
+        }
+
+        function startCarEngineSound() {
+            if (!audioCtx || engineOsc) return;
+            engineOsc = audioCtx.createOscillator(); engineGain = audioCtx.createGain();
+            engineOsc.type = 'sawtooth'; engineOsc.frequency.setValueAtTime(52, audioCtx.currentTime); 
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(160, audioCtx.currentTime);
+            engineGain.gain.setValueAtTime(0.85, audioCtx.currentTime); 
+            engineOsc.connect(filter); filter.connect(engineGain); engineGain.connect(audioCtx.destination);
+            engineOsc.start();
+        }
+
+        function stopCarEngineSound() { if (engineOsc) { engineOsc.stop(); engineOsc.disconnect(); engineOsc = null; } }
+
+        function bypassOrientation() { document.getElementById("orientation-screen").style.display = "none"; startTheGame(); }
+
+        function checkOrientation() {
+            if (isStarted || document.getElementById("language-screen").style.display === "flex") return;
+            const screenPrompt = document.getElementById("orientation-screen"); const startBtn = document.getElementById("start-btn");
+            if (window.innerHeight > window.innerWidth) { screenPrompt.style.display = "flex"; startBtn.style.display = "none"; } 
+            else { screenPrompt.style.display = "none"; startBtn.style.display = "block"; }
+        }
+
+        window.addEventListener("resize", () => {
+            if (camera && renderer) { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+            checkOrientation();
+        });
+
+        function initEngine() {
+            if (typeof THREE === 'undefined') return false;
+
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x0a0a20); scene.fog = new THREE.FogExp2(0x0a0a20, 0.012);
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.5); scene.add(ambientLight);
+            sunLight = new THREE.DirectionalLight(0xffffff, 0.3); sunLight.position.set(5, 20, 20); scene.add(sunLight);
+
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: 0x241b15, roughness: 0.8 }));
+            floor.rotation.x = -Math.PI / 2; scene.add(floor);
+
+            houseGroup = new THREE.Group();
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.7 });
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(8, 6, 0.4), wallMat); backWall.position.set(0, 3, -4); houseGroup.add(backWall);
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 8), wallMat); leftWall.position.set(-4, 3, 0); houseGroup.add(leftWall);
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 8), wallMat); rightWall.position.set(4, 3, 0); houseGroup.add(rightWall);
+            const floorInterior = new THREE.Mesh(new THREE.BoxGeometry(8, 0.2, 8), new THREE.MeshStandardMaterial({ color: 0x3e2723 })); floorInterior.position.set(0, 0.1, 0); houseGroup.add(floorInterior);
+
+            const balconyFloor = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 2.5), new THREE.MeshStandardMaterial({ color: 0x4e342e })); balconyFloor.position.set(0, 3, 5.25); houseGroup.add(balconyFloor);
+            const fenceMat = new THREE.MeshStandardMaterial({ color: 0xd7ccc8 });
+            const frontFence = new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 0.1), fenceMat); frontFence.position.set(0, 3.6, 6.5); houseGroup.add(frontFence);
+            const leftFence = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 2.5), fenceMat); leftFence.position.set(-3, 3.6, 5.25); houseGroup.add(leftFence);
+            const rightFence = leftFence.clone(); rightFence.position.x = 3; houseGroup.add(rightFence);
+
+            const telescopeGroup = new THREE.Group();
+            const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.08, 1.2, 16), new THREE.MeshStandardMaterial({ color: 0x37474f, roughness: 0.3 }));
+            tube.rotation.x = Math.PI / 4; tube.position.y = 0.6; telescopeGroup.add(tube);
+            const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.8, 8), new THREE.MeshStandardMaterial({ color: 0x212121 })); stand.position.y = 0.4; telescopeGroup.add(stand);
+            telescopeGroup.position.set(0, 3.1, 5.8); houseGroup.add(telescopeGroup);
+
+            bBandi = createRobloxChar(colorBandi, false, 0.85); bBandi.position.set(-1.0, 3.1, 5.0); houseGroup.add(bBandi);
+            bJoana = createRobloxChar(colorJoana, true, 0.85); bJoana.position.set(1.0, 3.1, 5.0); houseGroup.add(bJoana);
+            scene.add(houseGroup);
+
+            bBandi.rotation.y = Math.PI; 
+            bJoana.rotation.y = Math.PI; 
+            bBandi.children.forEach(c => { if(c.position.y === 1.15) c.rotation.x = -Math.PI / 6; });
+            bJoana.children.forEach(c => { if(c.position.y === 1.15) c.rotation.x = -Math.PI / 6; });
+
+            mainMeteor = new THREE.Mesh(new THREE.SphereGeometry(1.2, 16, 16), new THREE.MeshBasicMaterial({ color: 0xff3d00 }));
+            mainMeteor.position.set(0, 35, 45); scene.add(mainMeteor);
+
+            car = new THREE.Group();
+            const carBody = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.0, 5.2), new THREE.MeshStandardMaterial({ color: 0xff1744, roughness: 0.2 })); carBody.position.y = 0.8; car.add(carBody);
+            const glass = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.2, 0.1), new THREE.MeshStandardMaterial({ color: 0xd1f2f7, transparent: true, opacity: 0.4 })); glass.position.set(0, 1.8, 1.5); car.add(glass);
+            const wheelGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.6, 24), wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            [-1.9, 1.9].forEach(x => { [-1.6, 1.6].forEach(z => { const w = new THREE.Mesh(wheelGeo, wheelMat); w.rotation.z = Math.PI / 2; w.position.set(x, 0.7, z); car.add(w); });});
+            
+            const carLightGeo = new THREE.ConeGeometry(2.2, 16.0, 16, 1, true);
+            const carLightMat = new THREE.MeshBasicMaterial({ color: 0xffeb3b, transparent: true, opacity: 0.25 });
+            
+            const leftHeadlight = new THREE.Mesh(carLightGeo, carLightMat);
+            leftHeadlight.rotation.x = -Math.PI / 2; 
+            leftHeadlight.position.set(-1.2, 0.8, 8.0); car.add(leftHeadlight);
+            
+            const rightHeadlight = leftHeadlight.clone();
+            rightHeadlight.position.x = 1.2; car.add(rightHeadlight);
+
+            carBandi = createRobloxChar(colorBandi, false, 1.2); carBandi.position.set(-0.7, 1.0, 0.2); car.add(carBandi);
+            carJoana = createRobloxChar(colorJoana, true, 1.2); carJoana.position.set(0.7, 1.0, 0.2); car.add(carJoana);
+            scene.add(car); car.position.y = -200;
+
+            valleyGroup = new THREE.Group(); valleyGroup.position.set(0, 0, 0); scene.add(valleyGroup);
+            const leftMountain = new THREE.Mesh(new THREE.BoxGeometry(40, 60, 120), new THREE.MeshStandardMaterial({ color: 0x3d2b22, roughness: 0.9 })); leftMountain.position.set(-25, 30, -30); valleyGroup.add(leftMountain);
+            const rightMountain = leftMountain.clone(); rightMountain.position.x = 25; valleyGroup.add(rightMountain);
+
+            tutTomb = new THREE.Mesh(new THREE.BoxGeometry(7.0, 2.0, 9.0), new THREE.MeshStandardMaterial({ color: 0x422a1d, roughness: 0.5 })); tutTomb.position.set(0, -200, -18); valleyGroup.add(tutTomb);
+            tutMummy = createWrappedMummyChar(4.0); tutMummy.position.set(0, -200, -18); valleyGroup.add(tutMummy);
+
+            const tombGeo = new THREE.BoxGeometry(1.8, 0.6, 3.2);
+            const tombMat = new THREE.MeshStandardMaterial({ color: 0x6d4c41, roughness: 0.5, metalness: 0.2 });
+            for(let i = 0; i < 12; i++) {
+                const tMesh = new THREE.Mesh(tombGeo, tombMat);
+                let sideX = (i % 2 === 0) ? -5.2 - Math.random()*1.5 : 5.2 + Math.random()*1.5;
+                let depthZ = -14 - (i * 3.5);
+                tMesh.position.set(sideX, -200, depthZ); tMesh.rotation.y = (Math.random() - 0.5) * 0.4;
+                valleyGroup.add(tMesh); multipleTombs.push(tMesh);
+            }
+
+            // 💧 تصميم وضبط مجسم الدموع
+            tearGroup = new THREE.Group();
+            const tearGeo = new THREE.BufferGeometry();
+            const vertices = new Float32Array([
+                -0.03, 0.08, 0,  0.03, 0.08, 0,   0, -0.08, 0
+            ]);
+            tearGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            const tearMat = new THREE.MeshBasicMaterial({ color: 0x00d2ff, side: THREE.DoubleSide });
+            
+            leftTear = new THREE.Mesh(tearGeo, tearMat); 
+            rightTear = new THREE.Mesh(tearGeo, tearMat);
+            
+            // محاذاة الدموع لتخرج من الأعين تماماً
+            leftTear.position.set(-0.22, 2.9, 0.55); 
+            rightTear.position.set(0.22, 2.9, 0.55);
+            
+            tearGroup.add(leftTear);
+            tearGroup.add(rightTear);
+            scene.add(tearGroup); tearGroup.position.y = -200;
+
+            sandParticles = new THREE.Group(); const sandMat = new THREE.MeshBasicMaterial({ color: 0xffb300, transparent: true, opacity: 0.8 });
+            for(let i=0; i<80; i++) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), sandMat); p.position.set(Math.random()*16 - 8, Math.random()*8, Math.random()*16 - 8); sandParticles.add(p); }
+            sandParticles.position.set(0, -200, -18); valleyGroup.add(sandParticles);
+
+            rainParticles = new THREE.Group(); const rainMat = new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.6 });
+            for(let i=0; i<250; i++) { const drop = new THREE.Mesh(new THREE.BoxGeometry(0.04, 1.2, 0.04), rainMat); drop.position.set(Math.random()*40 - 20, Math.random()*30, Math.random()*40 - 20); rainParticles.add(drop); }
+            scene.add(rainParticles); rainParticles.position.y = -200; 
+
+            vBandi = createRobloxChar(colorBandi, false, 2.5); vBandi.position.set(-1.4, -200, -6.5); valleyGroup.add(vBandi);
+            vJoana = createRobloxChar(colorJoana, true, 2.5); vJoana.position.set(1.4, -200, -6.5); valleyGroup.add(vJoana);
+
+            camera.position.set(0, 4.4, -3.0); camera.lookAt(0, 5.0, 45); 
+            renderer.render(scene, camera);
+            return true;
+        }
+
+        function attachFlashlightToHand(charGroup, isGirl) {
+            const old = charGroup.getObjectByName("flashlightGroup");
+            if(old) charGroup.remove(old);
+
+            const flashlight = new THREE.Group();
+            flashlight.name = "flashlightGroup";
+            
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.3, 16), new THREE.MeshStandardMaterial({color: 0x222222, roughness: 0.5}));
+            body.rotation.x = Math.PI / 2; 
+            flashlight.add(body);
+            
+            const coneLength = 22.0;
+            const coneGeo = new THREE.ConeGeometry(2.5, coneLength, 32, 1, true);
+            
+            const coneMat = new THREE.MeshBasicMaterial({
+                color: 0xfff9e6, 
+                transparent: true,
+                opacity: 0.15, 
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const lightCone = new THREE.Mesh(coneGeo, coneMat);
+            
+            lightCone.rotation.x = -Math.PI / 2;
+            lightCone.position.set(0, 0, -coneLength / 2); 
+            flashlight.add(lightCone);
+            
+            charGroup.add(flashlight);
+            
+            if(isGirl) {
+                flashlight.position.set(0.32 * 2.5, 0.65 * 2.5, -0.1);
+            } else {
+                flashlight.position.set(0.42 * 2.5, 0.65 * 2.5, -0.1);
+            }
+        }
+
+        function createRobloxChar(torsoColor, isGirl, scaleFactor = 1.0) {
+            const group = new THREE.Group(); const armMat = new THREE.MeshStandardMaterial({ color: torsoColor, roughness: 0.4 }); const armGeo = new THREE.BoxGeometry(0.14, 0.5, 0.14);
+            if(isGirl) {
+                const dress = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.9, 32), new THREE.MeshStandardMaterial({ color: torsoColor, roughness: 0.3 })); dress.position.y = 0.55; group.add(dress);
+                const leftArm = new THREE.Mesh(armGeo, armMat); leftArm.position.set(-0.32, 0.65, 0); group.add(leftArm);
+                const rightArm = new THREE.Mesh(armGeo, armMat); rightArm.position.set(0.32, 0.65, -0.2); rightArm.rotation.x = -Math.PI/2; group.add(rightArm); 
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 32, 32), new THREE.MeshStandardMaterial({ color: 0xffcc99 })); head.position.y = 1.15; group.add(head);
+                const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.3, 0.16), new THREE.MeshStandardMaterial({ color: 0xffcc99 })); leftLeg.position.set(-0.14, 0.15, 0); group.add(leftLeg);
+                const rightLeg = leftLeg.clone(); rightLeg.position.x = 0.14; group.add(rightLeg);
+            } else {
+                const torso = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.85, 0.35), new THREE.MeshStandardMaterial({ color: torsoColor })); torso.position.y = 0.575; group.add(torso);
+                const leftArm = new THREE.Mesh(armGeo, armMat); leftArm.position.set(-0.42, 0.65, 0); group.add(leftArm);
+                const rightArm = new THREE.Mesh(armGeo, armMat); rightArm.position.set(0.42, 0.65, -0.2); rightArm.rotation.x = -Math.PI/2; group.add(rightArm); 
+                const legs = new THREE.Mesh(new THREE.BoxGeometry(0.63, 0.5, 0.32), new THREE.MeshStandardMaterial({ color: 0x1a237e })); legs.position.y = 0.25; group.add(legs);
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), new THREE.MeshStandardMaterial({ color: 0xffcc99 })); head.position.y = 1.15; group.add(head);
+            }
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.02), eyeMat); leftEye.position.set(-0.09, isGirl ? 1.19 : 1.2, -0.22); group.add(leftEye);
+            const rightEye = leftEye.clone(); rightEye.position.x = 0.09; group.add(rightEye);
+            const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.02), eyeMat); mouth.position.set(0, isGirl ? 1.05 : 1.08, -0.22); group.add(mouth);
+
+            group.scale.set(scaleFactor, scaleFactor, scaleFactor); return group;
+        }
+
+        function createWrappedMummyChar(scaleFactor = 1.0) {
+            const group = new THREE.Group(), mat = new THREE.MeshStandardMaterial({ color: 0xeeeecc, roughness: 1.0 });
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.5), mat); torso.position.y = 0.8; group.add(torso);
+            const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.7, 0.18), mat); leftArm.position.set(-0.5, 0.9, 0); group.add(leftArm);
+            const rightArm = leftArm.clone(); rightArm.position.x = 0.5; group.add(rightArm);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), mat); head.position.y = 1.6; group.add(head);
+            const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.02), new THREE.MeshBasicMaterial({ color: 0xff0000 })); leftEye.position.set(-0.16, 1.65, 0.31); group.add(leftEye);
+            const rightEye = leftEye.clone(); rightEye.position.x = 0.16; group.add(rightEye);
+            group.scale.set(scaleFactor, scaleFactor, scaleFactor); return group;
+        }
+
+        function startTheGame() {
+            initAudioEngine(); 
+            document.getElementById("orientation-screen").style.display = 'none'; document.getElementById("start-btn").style.display = 'none'; 
+            const loadingScreen = document.getElementById("loading-screen"); const uiBox = document.getElementById("story-ui");
+            const isEngineReady = initEngine(); if (!isEngineReady) return;
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight);
+            loadingScreen.style.display = 'flex'; 
+            setTimeout(() => {
+                loadingScreen.style.opacity = '0'; 
+                setTimeout(() => {
+                    loadingScreen.style.display = 'none'; uiBox.style.display = 'block'; isStarted = true; animate(); 
+                    document.getElementById("speaker-name").innerText = translations[gameLang].joanaName + ":";
+                    document.getElementById("speaker-name").style.color = colorJoana; typeWriterEffect(translations[gameLang].d1, "joana");
+                }, 400);
+            }, 800); 
+        }
+
+        document.getElementById("story-ui").addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (isTyping) {
+                clearTimeout(typeTimeout); isTyping = false;
+                let textKey = "d1";
+                if (currentSceneId === 1) textKey = "d" + scene1SubStep;
+                else if (currentSceneId === 3) textKey = "s3_" + scene3SubStep;
+                else if (currentSceneId === 4) textKey = "s4_" + scene4SubStep;
+                else if (currentSceneId === 5) textKey = "s5_" + scene4SubStep;
+                else textKey = "s" + currentSceneId;
+                document.getElementById("story-text").innerText = translations[gameLang][textKey];
+                return;
+            }
+
+            if (currentSceneId === 1) {
+                if (scene1SubStep === 1) {
+                    scene1SubStep = 2; document.getElementById("speaker-name").innerText = translations[gameLang].bandiName + ":";
+                    document.getElementById("speaker-name").style.color = "#0066ff"; typeWriterEffect(translations[gameLang].d2, "bandi");
+                } else if (scene1SubStep === 2) {
+                    scene1SubStep = 3; document.getElementById("story-text").innerText = ""; typeWriterEffect(translations[gameLang].d3, "bandi");
+                } else {
+                    currentSceneId = 2; document.getElementById("speaker-name").innerText = translations[gameLang].bandiName + ":";
+                    document.getElementById("speaker-name").style.color = "#0066ff"; typeWriterEffect(translations[gameLang].d4, "bandi");
+                    clearMeteors(); startCarEngineSound(); 
+                }
+            } 
+            else if (currentSceneId === 2) {
+                currentSceneId = 3; scene3SubStep = 1; document.getElementById("speaker-name").innerText = translations[gameLang].joanaName + ":";
+                document.getElementById("speaker-name").style.color = colorJoana; typeWriterEffect(translations[gameLang].s3_1, "joana");
+            } 
+            else if (currentSceneId === 3) {
+                if (scene3SubStep === 1) {
+                    scene3SubStep = 2; document.getElementById("speaker-name").innerText = translations[gameLang].bandiName + ":";
+                    document.getElementById("speaker-name").style.color = "#0066ff"; typeWriterEffect(translations[gameLang].s3_2, "bandi");
+                } else {
+                    currentSceneId = 4; scene4SubStep = 1; stopCarEngineSound(); 
+                    document.getElementById("speaker-name").innerText = translations[gameLang].joanaName + ":";
+                    document.getElementById("speaker-name").style.color = colorJoana; typeWriterEffect(translations[gameLang].s4_1, "joana");
+                }
+            } 
+            else if (currentSceneId === 4) {
+                if (scene4SubStep === 1) {
+                    scene4SubStep = 2; document.getElementById("speaker-name").innerText = translations[gameLang].bandiName + ":";
+                    document.getElementById("speaker-name").style.color = "#0066ff"; typeWriterEffect(translations[gameLang].s4_2, "bandi");
+                } else {
+                    currentSceneId = 5; scene4SubStep = 1; 
+                    document.getElementById("speaker-name").innerText = translations[gameLang].joanaName + ":";
+                    document.getElementById("speaker-name").style.color = colorJoana; typeWriterEffect(translations[gameLang].s5_1, "joana");
+                }
+            }
+            else if (currentSceneId === 5) {
+                if (scene4SubStep === 1) {
+                    scene4SubStep = 2; 
+                    playStoneMovingSound(); 
+                    startWindStormSound(); 
+                    document.getElementById("speaker-name").innerText = translations[gameLang].bandiName + ":";
+                    document.getElementById("speaker-name").style.color = "#0066ff"; typeWriterEffect(translations[gameLang].s5_2, "bandi");
+                } else {
+                    currentSceneId = 7;
+                    playJoanaScreamSound(); 
+                }
+            }
+            else if (currentSceneId === 7) {
+                currentSceneId = 8;
+                stopWindStormSound(); 
+                startCryingSound(); 
+                document.getElementById("speaker-name").innerText = translations[gameLang].bandiName + ":";
+                document.getElementById("story-text").innerText = "";
+                document.getElementById("speaker-name").style.color = "#0066ff"; typeWriterEffect(translations[gameLang].s8, "sad_bandi");
+            }
+            else if (currentSceneId === 8) {
+                // تم التعديل هنا: إيقاف الصوت والانتقال فوراً لصفحة اللعبة التالية
+                stopCryingSound();
+                window.location.href = "leve2.html"; 
+            }
+        });
+
+        function clearMeteors() { splitMeteors.forEach(m => scene.remove(m)); splitMeteors = []; meteorHasSplit = false; }
+
+        function animate() {
+            if (!isStarted) return; requestAnimationFrame(animate);
+
+            if (currentSceneId >= 5) {
+                rainParticles.position.y = 0; 
+                rainParticles.children.forEach(drop => {
+                    drop.position.y -= 0.55; 
+                    if (drop.position.y < -5) drop.position.y = 25;
+                });
+            }
+
+            if (currentSceneId === 1) {
+                houseGroup.position.y = 0; if(!isLightningActive) ambientLight.intensity = 0.5; sunLight.intensity = 0.3;
+                if (camera.position.z < 2.5) camera.position.z += 0.04; camera.lookAt(0, 7.5, 45);
+
+                if (!meteorHasSplit) {
+                    mainMeteor.position.y -= 0.12; mainMeteor.position.z -= 0.08;
+                    if (mainMeteor.position.y < 22) {
+                        meteorHasSplit = true; scene.remove(mainMeteor); playExplosionSound();
+                        for (let i = 0; i < 5; i++) {
+                            const subM = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), new THREE.MeshBasicMaterial({ color: 0xff5722 }));
+                            subM.position.copy(mainMeteor.position); subM.userData = { vx: (i - 2) * 0.11, vy: -0.05 - Math.random() * 0.03, vz: -0.04 - Math.random() * 0.03 };
+                            scene.add(subM); splitMeteors.push(subM);
+                        }
+                    }
+                } else { splitMeteors.forEach(m => { m.position.x += m.userData.vx; m.position.y += m.userData.vy; m.position.z += m.userData.vz; }); }
+            }
+            else if (currentSceneId === 2) { 
+                houseGroup.position.y = -200; 
+                car.position.set(0, 0, -35); 
+                car.rotation.y = 0; 
+                
+                carBandi.rotation.y = Math.PI; 
+                carJoana.rotation.y = Math.PI;
+
+                camera.position.set(0, 2.0, -25); 
+                camera.lookAt(0, 1.2, -35); 
+                ambientLight.intensity = 2.0; sunLight.intensity = 1.5; 
+            }
+            else if (currentSceneId === 3) { 
+                car.position.z += 0.35; 
+                
+                if (camera.position.z > -55) {
+                    camera.position.z -= 0.65; 
+                }
+                
+                camera.lookAt(car.position.x, car.position.y + 1.2, car.position.z); 
+            }
+            else if (currentSceneId === 4) { 
+                car.position.y = -200; 
+                vBandi.position.set(-1.4, 0, -6.5); vJoana.position.set(1.4, 0, -6.5); 
+                
+                vBandi.rotation.y = 0; vJoana.rotation.y = 0; 
+                
+                attachFlashlightToHand(vBandi, false);
+                attachFlashlightToHand(vJoana, true);
+
+                camera.position.set(0, 3.5, 20.0); 
+                camera.lookAt(0, 1.2, -15); 
+                
+                if(!isLightningActive) ambientLight.intensity = 0.65; sunLight.intensity = 0.0;
+                multipleTombs.forEach(t => t.position.y = 0.3);
+            }
+            else if (currentSceneId === 5) {
+                tutTomb.position.y = 1.0; 
+                if(scene4SubStep === 2) { tutMummy.position.y = 2.0; } 
+
+                vBandi.position.set(-1.4, 0, -6.5);
+                vJoana.position.set(1.4, 0, -6.5);
+                
+                vBandi.rotation.y = 0;   
+                vJoana.rotation.y = 0;  
+                
+                camera.position.set(0, 3.5, 20.0); 
+                camera.lookAt(0, 1.2, -15); 
+                if(!isLightningActive) ambientLight.intensity = 0.65;
+            }
+            else if (currentSceneId === 7) { 
+                sandParticles.position.y = 0;
+                sandParticles.children.forEach(p => {
+                    p.position.x += Math.sin(Date.now() * 0.05) * 0.2; p.position.y += 0.1;
+                    if(p.position.y > 8) p.position.y = 0;
+                });
+                if(sandParticles.position.z === -18) { sandParticles.position.copy(vJoana.position); } 
+                vJoana.position.y = -200; tutMummy.position.y = -200;
+                
+                vBandi.rotation.y = 0; 
+                camera.position.set(0, 3.5, 20.0); 
+                camera.lookAt(0, 1.2, -15); 
+                if(!isLightningActive) ambientLight.intensity = 0.65; 
+            }
+            else if (currentSceneId === 8) { 
+                sandParticles.position.y = -200; 
+                vBandi.position.set(0, 0, -6.5); 
+                vBandi.rotation.y = Math.PI; 
+                
+                camera.position.set(0, 2.7, -3.4); 
+                camera.lookAt(0, 2.3, -6.5); 
+                
+                tearGroup.position.set(vBandi.position.x, vBandi.position.y, vBandi.position.z);
+                tearGroup.position.y = 0; 
+
+                leftTear.position.y -= 0.018; 
+                rightTear.position.y -= 0.018; 
+                
+                if(leftTear.position.y < 2.2) { 
+                    leftTear.position.set(-0.22, 2.9, 0.55); 
+                    rightTear.position.set(0.22, 2.9, 0.55);
+                } 
+                if(!isLightningActive) ambientLight.intensity = 0.65; 
+            }
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

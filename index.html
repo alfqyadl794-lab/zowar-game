@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta name="monetag" content="859be7afe0435e384eee481efcc200ec">
+    <meta charset="UTF-8">
+    <title>زوار اللعنة - القائمة الرئيسية</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0b0b;
+            background-image: url('background.jpg');
+            background-size: cover;
+            background-position: center;
+            color: #fff;
+            font-family: 'Cairo', sans-serif;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            transition: transform 1.2s ease-in-out, opacity 1.2s ease-in-out;
+        }
+        
+        .overlay {
+            background: rgba(0, 0, 0, 0.4);
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        .screen {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+        }
+
+        #menuScreen {
+            display: none;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 10px #ff0000;
+        }
+
+        .play-btn {
+            width: 90px; 
+            height: 90px;
+            border: 3px solid #ff0000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 20px auto;
+            background: rgba(255, 0, 0, 0.2);
+            cursor: pointer;
+            transition: 0.3s;
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
+        }
+        .play-btn:hover {
+            background: rgba(255, 0, 0, 0.5);
+            transform: scale(1.1);
+        }
+        .play-btn span {
+            font-size: 35px;
+            color: #fff;
+            margin-right: -5px;
+        }
+
+        .menu-grid {
+            display: flex;
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        .card {
+            width: 160px;
+            height: 220px;
+            background: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            cursor: pointer;
+            transition: 0.3s;
+            text-decoration: none;
+            color: white;
+            overflow: hidden;
+        }
+
+        .card:hover {
+            border-color: #ff0000;
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .card img {
+            width: 100%;
+            height: 75%;
+            object-fit: cover;
+            border-radius: 8px 8px 0 0;
+            opacity: 0.9;
+        }
+
+        .card:hover img {
+            opacity: 1;
+        }
+
+        .card p {
+            margin: 10px 0;
+            font-size: 14px;
+            font-weight: bold;
+            text-shadow: 1px 1px 5px #000;
+        }
+
+        /* تنسيق البطاقات المقفلة */
+        .card.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none; /* بيمنع أي ضغط على الكارد المقفل */
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay"></div>
+
+    <audio id="horrorAudio" loop>
+        <source src="horror_music.mp3" type="audio/mpeg">
+    </audio>
+
+    <div id="introScreen" class="screen">
+        <h1>زوار اللعنة</h1>
+        <p style="color: #ccc; margin-bottom: 10px; text-shadow: 1px 1px 3px #000;">اضغط على المثلث للبدء</p>
+        <div class="play-btn" onclick="openMenuWithCinematic()">
+            <span>▶</span>
+        </div>
+    </div>
+
+    <div id="menuScreen" class="screen">
+        <h1>اختر المرحلة</h1>
+        <div class="menu-grid">
+            <a href="start.html" class="card" onclick="completeIntro()">
+                <img src="intro.jpg" alt="Intro">
+                <p>رحلة إلى المجهول</p>
+            </a>
+
+            <a href="leve2.html" id="chapter1Card" class="card disabled">
+                <img src="chapter1.jpg" alt="Chapter 1">
+                <p>متحف الألغاز</p>
+            </a>
+            
+            <div class="card disabled">
+                <img src="chapter2.jpg" alt="Chapter 2">
+                <p>غابة الغموض (قريباً)</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // التحقق مما إذا كان اللاعب قد أنهى الإنترو مسبقاً عند فتح الصفحة
+        window.onload = function() {
+            if (localStorage.getItem("introWatched") === "true") {
+                unlockChapter1();
+            }
+        };
+
+        function openMenuWithCinematic() {
+            var audio = document.getElementById("horrorAudio");
+            audio.play().catch(function(error) {
+                console.log("التشغيل التلقائي للصوت:", error);
+            });
+
+            document.body.style.transform = "scale(1.3)";
+            document.body.style.opacity = "0";
+
+            setTimeout(() => {
+                document.getElementById('introScreen').style.display = 'none';
+                var menuScreen = document.getElementById('menuScreen');
+                menuScreen.style.display = 'flex';
+                
+                document.body.style.transform = "scale(1)";
+                document.body.style.opacity = "1";
+                menuScreen.style.opacity = "1";
+            }, 1000);
+        }
+
+        // دالة يتم تفعيلها عند الضغط على كارد الإنترو لتسجيل أنه شاهده
+        function completeIntro() {
+            localStorage.setItem("introWatched", "true");
+        }
+
+        // دالة فتح الشابتر الأول
+        function unlockChapter1() {
+            var ch1 = document.getElementById("chapter1Card");
+            ch1.classList.remove("disabled");
+        }
+    </script>
+</body>
+</html>

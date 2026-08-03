@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>متحف الألغاز - التعديل المطور</title>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            width: 100%; height: 100%; margin: 0; padding: 0;
+            overflow: hidden; background-color: #0c0f17;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none; position: fixed;
+        }
+
+        /* شاشة الترحيب والبداية */
+        #welcome-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #0c0f17; color: #ffd700; display: flex;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 4000; text-align: center; direction: rtl; padding: 20px;
+        }
+        #welcome-screen h1 { font-size: 38px; margin: 0 0 15px 0; text-shadow: 0 0 25px #ffd700; }
+        #welcome-screen p { font-size: 16px; color: #ffffff; margin-bottom: 30px; max-width: 500px; line-height: 1.6; }
+        #start-game-btn {
+            background: #ffd700; color: #0c0f17; border: none; border-radius: 8px;
+            padding: 14px 35px; font-size: 18px; font-weight: bold; cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); transition: transform 0.2s;
+        }
+        #start-game-btn:active { transform: scale(0.95); }
+
+        #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 16px; height: 16px;
+            border: 2px solid #ff0000; border-radius: 50%; transform: translate(-50%, -50%);
+            z-index: 200; pointer-events: none; display: block;
+        }
+        #crosshair::after {
+            content: ''; position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
+            background: #ff0000; border-radius: 50%; transform: translate(-50%, -50%);
+        }
+
+        #hearts-container { position: absolute; top: 10px; left: 10px; display: flex; gap: 4px; z-index: 150; }
+        .ui-heart {
+            width: 18px; height: 18px; background-color: #ff0000;
+            clip-path: polygon(50% 15%, 65% 0, 85% 0, 100% 20%, 100% 40%, 50% 95%, 0 40%, 0 20%, 15% 0, 35% 0);
+            transition: opacity 0.2s;
+        }
+
+        #damage-flash {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255, 0, 0, 0.4); display: none; z-index: 300; pointer-events: none;
+        }
+
+        #gameover-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000000; color: #ff0000; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; text-align: center;
+        }
+        #gameover-screen h1 { font-size: 50px; margin: 0 0 10px 0; text-shadow: 0 0 20px #ff0000; }
+
+        #white-fade-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #ffffff; opacity: 0; display: none; z-index: 900;
+            transition: opacity 0.8s ease-in-out; pointer-events: none;
+        }
+
+        #chapter2-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000000; color: #ffd700; display: none;
+            flex-direction: column; align-items: center; justify-content: center;
+            z-index: 2000; text-align: center; direction: rtl;
+        }
+        #chapter2-screen h1 { font-size: 42px; margin: 0; text-shadow: 0 0 25px #ffd700; animation: pulse 1.5s infinite alternate; }
+        @keyframes pulse { from { transform: scale(0.95); } to { transform: scale(1.05); } }
+
+        #instruction-bar {
+            position: absolute; top: 15px; right: 10px; width: 85%;
+            background: rgba(0, 0, 0, 0.85); border: 2px solid #ffd700;
+            border-radius: 6px; padding: 10px 14px; color: #ffd700; text-align: right;
+            font-size: 14px; font-weight: bold; z-index: 150; direction: rtl; line-height: 1.5;
+        }
+
+        #dialogue-box {
+            position: absolute; bottom: 25px; left: 50%; transform: translateX(-50%);
+            width: 85%; max-width: 600px; background: rgba(10, 15, 25, 0.95);
+            border: 2px solid #00ffff; border-radius: 8px; padding: 14px 18px;
+            color: #ffffff; text-align: center; font-size: 16px; font-weight: bold;
+            z-index: 600; direction: rtl; line-height: 1.6; display: none; cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+        }
+        #dialogue-hint { font-size: 11px; color: #00ffff; margin-top: 6px; display: block; }
+
+        #timer-bar {
+            position: absolute; top: 70px; left: 10px;
+            background: rgba(0, 0, 0, 0.8); border: 1.5px solid #00ffff; padding: 4px 10px;
+            color: #00ffff; font-weight: bold; font-size: 14px; border-radius: 4px; z-index: 150; display: none;
+        }
+
+        #control-panel-right { position: absolute; bottom: 10px; right: 10px; width: 160px; height: 160px; z-index: 130; }
+        .btn-wrapper { position: absolute; width: 54px; height: 54px; display: flex; align-items: center; justify-content: center; }
+        #wrapper-jump { top: 0px; left: 53px; }
+        #wrapper-run { top: 50px; left: 0px; }
+
+        .control-btn { width: 44px; height: 44px; background: rgba(0, 0, 0, 0.65); border: 1.5px solid rgba(255, 255, 255, 0.3); border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; touch-action: none; font-size: 18px; }
+        
+        #shoot-btn { position: absolute; bottom: 15px; right: 190px; width: 58px; height: 58px; background: rgba(220, 53, 69, 0.4); border: 2.5px solid #dc3545; border-radius: 50%; color: #fff; font-size: 24px; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 140; touch-action: none; }
+        #joystick-container { position: absolute; bottom: 25px; left: 25px; width: 120px; height: 120px; background: rgba(255, 255, 255, 0.1); border: 2px solid rgba(255, 255, 255, 0.3); display: flex; align-items: center; justify-content: center; z-index: 130; touch-action: none; border-radius: 50%; }
+        #joystick-knob { width: 50px; height: 50px; background: rgba(255, 255, 255, 0.4); border: 1.5px solid rgba(255, 255, 255, 0.7); border-radius: 50%; position: absolute; pointer-events: none; }
+
+        #interact-btn {
+            position: absolute; bottom: 85px; right: 190px; width: 58px; height: 58px;
+            background: rgba(255, 215, 0, 0.2); border: 3px solid #ffd700; border-radius: 50%;
+            color: #ffd700; font-size: 22px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 140; opacity: 0.3; pointer-events: none;
+        }
+        #interact-label { position: absolute; bottom: -16px; font-size: 10px; color: #ffd700; white-space: nowrap; font-weight: bold; text-align: center; width: 100%; left: 0; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="welcome-screen">
+        <h1>🏛️ متحف الألغاز - التعديل المطور</h1>
+        <p>مرحباً بك في المغامرة المفرطة! استعد لمواجهة الأسرار، وتدمير قناع توت عنخ آمون، وحماية الدي جي وسط أجواء حماسية غامضة.</p>
+        <button id="start-game-btn">ابدأ اللعبة 🎮</button>
+    </div>
+
+    <div id="game-canvas"></div>
+    <div id="crosshair"></div>
+    <div id="damage-flash"></div>
+    <div id="white-fade-screen"></div>
+
+    <div id="chapter2-screen">
+        <h1>⏳ انتظروا الجزء الثاني 🔥</h1>
+    </div>
+
+    <div id="gameover-screen">
+        <h1>GAME OVER</h1>
+        <p>انتهت محاولاتك...</p>
+    </div>
+
+    <div id="hearts-container">
+        <div class="ui-heart" id="h1"></div><div class="ui-heart" id="h2"></div><div class="ui-heart" id="h3"></div><div class="ui-heart" id="h4"></div><div class="ui-heart" id="h5"></div>
+    </div>
+
+    <div id="timer-bar">حماية الدي جي: 60 ثانية</div>
+    <div id="instruction-bar">🎯 المهمة: اقتل المومياوات بطلقة واحدة، ثم اقترب وصوب على قناع توت عنخ آمون!</div>
+
+    <div id="dialogue-box">
+        <span id="dialogue-text">...</span>
+        <span id="dialogue-hint">👈 انقر هنا للمتابعة</span>
+    </div>
+
+    <div id="joystick-container"><div id="joystick-knob"></div></div>
+    <div id="shoot-btn">💥</div>
+    <div id="interact-btn">✋<div id="interact-label">تفاعل</div></div>
+
+    <div id="control-panel-right">
+        <div class="btn-wrapper" id="wrapper-jump"><div class="control-btn" id="jump">🦘</div></div>
+        <div class="btn-wrapper" id="wrapper-run"><div class="control-btn" id="run">🏃</div></div>
+    </div>
+
+    <script>
+        // إعداد الموسيقى الخلفية بصيغة MP3
+        const bgMusic = new Audio('level_sound.mp3'); // يمكنك استبدال 'music.mp3' برابط أو مسار ملف الموسيقى الخاص بك
+        bgMusic.loop = true;
+        bgMusic.volume = 0.4;
+
+        // ربط زر البداية لتشغيل الموسيقى وإخفاء شاشة الترحيب
+        document.getElementById('start-game-btn').addEventListener('click', () => {
+            initAudio();
+            bgMusic.play().catch(e => console.log("Audio play blocked or missing file:", e));
+            document.getElementById('welcome-screen').style.display = 'none';
+        });
+
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx = null;
+        function initAudio() { if (!audioCtx) audioCtx = new AudioContext(); }
+
+        function playTone(freq, type, duration, vol=0.2) {
+            if(!audioCtx) audioCtx = new AudioContext();
+            let osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            g.gain.setValueAtTime(vol, audioCtx.currentTime); g.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+            osc.connect(g); g.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function playFootstepSound() { playTone(80, 'triangle', 0.1, 0.3); }
+        function playScreamSound() {
+            playTone(400, 'sawtooth', 0.8, 0.8);
+            setTimeout(() => playTone(150, 'sawtooth', 1.2, 0.9), 200);
+        }
+        function playRadioBeep() { playTone(950, 'sine', 0.08, 0.25); } 
+        function playHelicopterSound() { 
+            let interval = setInterval(() => { 
+                if(cutsceneActive || gameState==="escape_flight" || gameState==="ending_helicopter") playTone(45, 'square', 0.05, 0.35); 
+                else clearInterval(interval); 
+            }, 70);
+        }
+        function playCollapseSound() {
+            let interval = setInterval(() => { if(gameState==="escape_flight") playTone(40 + Math.random() * 40, 'sawtooth', 0.25, 0.6); else clearInterval(interval); }, 90);
+        }
+        function playManVoice() { playTone(220, 'triangle', 1.2, 0.7); }
+        function playShotgunSound() { playTone(120, 'sawtooth', 0.2, 0.5); }
+        function playBlueShotSound() { playTone(850, 'sine', 0.15, 0.4); }
+        function playExplosionSound() { playTone(50, 'square', 0.5, 0.7); }
+        function playFireballSound() { playTone(180, 'sawtooth', 0.4, 0.3); }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x040609); 
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.rotation.order = 'YXZ';
+        scene.add(camera);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('game-canvas').appendChild(renderer.domElement);
+
+        const clock = new THREE.Clock(); 
+        const raycaster = new THREE.Raycaster();
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); scene.add(ambientLight);
+        const sunLight = new THREE.DirectionalLight(0xfff5ea, 0.8); sunLight.position.set(20, 80, -50); scene.add(sunLight);
+
+        // مجسم الشوت جن
+        const gunGroup = new THREE.Group();
+        const gunBodyMat = new THREE.MeshStandardMaterial({ color: 0x654321, roughness: 0.5 });
+        const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.7), gunBodyMat);
+        const gunBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.8), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+        gunBarrel.rotation.x = Math.PI / 2; gunBarrel.position.set(0, 0.04, -0.35);
+        const gunHandle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.12), gunBodyMat);
+        gunHandle.position.set(0, -0.12, 0.2); gunHandle.rotation.x = -0.3;
+        gunGroup.add(gunBody, gunBarrel, gunHandle);
+        gunGroup.position.set(0.3, -0.28, -0.65);
+        camera.add(gunGroup);
+
+        // المتحف
+        const museumGroup = new THREE.Group();
+        const wallMat = new THREE.MeshStandardMaterial({ color: 0x544338, roughness: 0.6 }); 
+        const floorMat = new THREE.MeshStandardMaterial({ color: 0x2b221a, roughness: 0.8 });
+
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(60, 1, 300), floorMat); floor.position.set(0, 0, -150); museumGroup.add(floor);
+        const leftWall = new THREE.Mesh(new THREE.BoxGeometry(2, 35, 300), wallMat); leftWall.position.set(-20, 17.5, -150); museumGroup.add(leftWall);
+        const rightWall = new THREE.Mesh(new THREE.BoxGeometry(2, 35, 300), wallMat); rightWall.position.set(20, 17.5, -150); museumGroup.add(rightWall);
+        scene.add(museumGroup);
+
+        const smokeGroup = new THREE.Group(); scene.add(smokeGroup);
+        const smokeGeo = new THREE.SphereGeometry(2.5, 6, 6);
+        const smokeMat = new THREE.MeshBasicMaterial({color: 0x776655, transparent: true, opacity: 0.6});
+
+        // بيئة الإذاعة
+        const radioEnvGroup = new THREE.Group();
+        radioEnvGroup.position.set(500, 0, 500);
+        const agriculturalGround = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), new THREE.MeshStandardMaterial({ color: 0x2e8b57, roughness: 0.9 }));
+        agriculturalGround.rotation.x = -Math.PI / 2; radioEnvGroup.add(agriculturalGround);
+        const towerBase = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 6, 35, 6), new THREE.MeshStandardMaterial({color: 0x778899, wireframe: true})); towerBase.position.y = 17.5; radioEnvGroup.add(towerBase);
+        scene.add(radioEnvGroup);
+
+        // توت
+        const tutGroup = new THREE.Group(); tutGroup.position.set(0, 0.5, -250);
+        const tutBody = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.8, 7, 16), new THREE.MeshStandardMaterial({color: 0x222222})); tutBody.position.y = 3.5; tutGroup.add(tutBody);
+        const tutMask = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.5, 0.8), new THREE.MeshStandardMaterial({color: 0xffd700, metalness: 0.8, roughness: 0.2}));
+        tutMask.position.set(0, 6.5, 1.2); tutMask.userData = { type: 'mask' }; tutGroup.add(tutMask);
+        scene.add(tutGroup);
+
+        // منى
+        const monaGroup = new THREE.Group(); monaGroup.position.set(0, 0.5, -265);
+        const monaBody = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 4), new THREE.MeshStandardMaterial({color: 0xff4070})); monaBody.position.y = 2;
+        monaGroup.add(monaBody); scene.add(monaGroup);
+
+        // الدي جي
+        const djGroup = new THREE.Group();
+        const djBodyMesh = new THREE.Mesh(new THREE.BoxGeometry(2.5, 4.5, 1.8), new THREE.MeshStandardMaterial({color: 0x111111})); djBodyMesh.position.y = 2.25;
+        djGroup.add(djBodyMesh); 
+        djGroup.visible = false; 
+        scene.add(djGroup);
+
+        // الهليكوبتر والحبل
+        const copterGroup = new THREE.Group(); 
+        copterGroup.position.set(0, 100, -400); 
+        copterGroup.visible = false; 
+        const copterBody = new THREE.Mesh(new THREE.BoxGeometry(14, 6, 6), new THREE.MeshStandardMaterial({color: 0x1c2e1c})); copterGroup.add(copterBody);
+        const rotor = new THREE.Mesh(new THREE.BoxGeometry(18, 0.2, 1.5), new THREE.MeshBasicMaterial({color: 0x111111})); rotor.position.y = 3.2; copterGroup.add(rotor);
+        const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 35), new THREE.MeshBasicMaterial({color: 0xdddddd})); rope.position.y = -17.5; copterGroup.add(rope);
+        scene.add(copterGroup);
+
+        // بيئة المحيط وكبينة الطائرة (المشهد النهائي)
+        const oceanGeo = new THREE.PlaneGeometry(2000, 2000);
+        const oceanMat = new THREE.MeshStandardMaterial({color: 0x005588, roughness: 0.1, metalness: 0.2});
+        const oceanMesh = new THREE.Mesh(oceanGeo, oceanMat); oceanMesh.rotation.x = -Math.PI / 2; oceanMesh.position.set(1000, 0, 1000); scene.add(oceanMesh);
+
+        const cabinGroup = new THREE.Group(); cabinGroup.position.set(1000, 15, 1000);
+        const cabinLight = new THREE.PointLight(0xffeedd, 1.5, 20); cabinLight.position.set(0, 2, 0); cabinGroup.add(cabinLight);
+
+        const cabinFloor = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 8), new THREE.MeshStandardMaterial({color: 0x333333})); cabinFloor.position.y = -1.5;
+        const cabinRoof = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 8), new THREE.MeshStandardMaterial({color: 0x222222})); cabinRoof.position.y = 2.5;
+        const cabinBack = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 0.2), new THREE.MeshStandardMaterial({color: 0x1a1a1a})); 
+        cabinBack.position.set(0, 0.5, -3.9);
+        cabinGroup.add(cabinFloor, cabinRoof, cabinBack);
+
+        const guyMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 3), new THREE.MeshStandardMaterial({color: 0x228b22})); 
+        guyMesh.position.set(0, 0.2, -1.5); 
+        
+        const monaInHeli = monaGroup.clone(); monaInHeli.position.set(1.5, -0.5, 0.5);
+        
+        const jarInCabin = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.2), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.6}));
+        const greenCreatureInCabin = new THREE.Mesh(new THREE.SphereGeometry(0.25), new THREE.MeshBasicMaterial({color: 0x00ff00}));
+        jarInCabin.position.set(-1.5, -0.9, 0.5); greenCreatureInCabin.position.set(-1.5, -0.9, 0.5);
+        
+        cabinGroup.add(guyMesh, monaInHeli, jarInCabin, greenCreatureInCabin);
+        scene.add(cabinGroup);
+
+        let creatureInJar = false; let hasJarInHand = false; let isMonaFollowing = false;
+        const jarGroup = new THREE.Group(); jarGroup.position.set(-10, 0.5, -110);
+        const jarMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 2.2, 12), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.4})); jarMesh.position.y = 1.1; jarGroup.add(jarMesh);
+
+        const creatureGroup = new THREE.Group();
+        const creatureMesh = new THREE.Mesh(new THREE.SphereGeometry(0.6), new THREE.MeshBasicMaterial({color: 0x00ff00})); creatureMesh.position.y = 1;
+        const creatureLight = new THREE.PointLight(0x00ff00, 3, 20); creatureLight.position.y = 1;
+        creatureGroup.add(creatureMesh, creatureLight);
+        creatureGroup.position.set(0, 2, -210);
+
+        let spawnedMummiesArray = [];
+        let maskHealth = 3; let isMaskDestroyed = false; let tutHealth = 5;
+        let djHealth = 5;
+        let wavesArray = []; let fireballsArray = []; let fireballTimer = 0;
+
+        const spawnPoint = new THREE.Vector3(0, 3, -95);
+        let player = { position: spawnPoint.clone(), pitch: 0, yaw: Math.PI, isGrounded: true, velocityY: 0 };
+        camera.position.copy(player.position);
+
+        let playerHearts = 5;
+        let gameState = "destroy_mask"; 
+        let cutsceneActive = false; let cutsceneStage = 0;
+        let isGameOverTriggered = false;
+        let djDefenseTimer = 60; let timerInterval = null;
+        let hasBlueShotgun = false;
+        let dialogueIndex = 0;
+        let isCameraEnteringCabin = false;
+
+        function clearAllFireballs() {
+            fireballsArray.forEach(fb => scene.remove(fb));
+            fireballsArray = [];
+        }
+
+        function triggerGameOver() {
+            if (isGameOverTriggered) return;
+            isGameOverTriggered = true; gameState = "gameover";
+            document.getElementById('instruction-bar').style.display = 'none';
+            document.getElementById('timer-bar').style.display = 'none';
+            document.getElementById('hearts-container').style.display = 'none';
+            document.getElementById('control-panel-right').style.display = 'none';
+            document.getElementById('joystick-container').style.display = 'none';
+            document.getElementById('shoot-btn').style.display = 'none';
+            document.getElementById('interact-btn').style.display = 'none';
+            document.getElementById('crosshair').style.display = 'none';
+            document.getElementById('dialogue-box').style.display = 'none';
+            document.getElementById('gameover-screen').style.display = 'flex';
+            playTone(50, 'sawtooth', 1.5, 0.8);
+            setTimeout(() => { window.location.href = "index.html"; }, 5000);
+        }
+
+        function takeDamage() {
+            if (playerHearts <= 0 || gameState === "gameover") return;
+            playerHearts -= 1;
+            if (playerHearts < 0) playerHearts = 0;
+            playTone(90, 'sawtooth', 0.3, 0.4);
+            
+            for (let i = 1; i <= 5; i++) {
+                let heartElem = document.getElementById(`h${i}`);
+                if (heartElem) heartElem.style.opacity = (i > playerHearts) ? "0.1" : "1";
+            }
+
+            document.getElementById('damage-flash').style.display = 'block';
+            setTimeout(() => document.getElementById('damage-flash').style.display = 'none', 150);
+            if (playerHearts <= 0) triggerGameOver();
+        }
+
+        function spawnFireball(speedMultiplier = 1.0) {
+            if (tutHealth <= 0 || gameState === "rescue_mona" || gameState === "escape_flight" || gameState === "ending_helicopter") return;
+            playFireballSound();
+            let geo = new THREE.SphereGeometry(0.5, 8, 8); let mat = new THREE.MeshBasicMaterial({color: 0xff5500});
+            let mesh = new THREE.Mesh(geo, mat); mesh.position.set(0, 6.5, -245);
+            
+            let targetPos = djGroup.position.clone();
+            if (Math.random() < 0.4) targetPos = player.position.clone();
+            
+            let direction = new THREE.Vector3().copy(targetPos).sub(mesh.position).normalize();
+            mesh.userData = { direction: direction, speed: 12 * speedMultiplier, blueHits: 0 };
+            scene.add(mesh); fireballsArray.push(mesh);
+        }
+
+        function spawnNormalMummy() {
+            initAudio();
+            let mGroup = new THREE.Group();
+            let body = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 3.5), new THREE.MeshStandardMaterial({color: 0xd2b48c})); body.position.y = 1.75;
+            mGroup.add(body);
+            mGroup.position.set((Math.random() - 0.5) * 30, 0.5, player.position.z - 35 - Math.random() * 25);
+            scene.add(mGroup); spawnedMummiesArray.push(mGroup);
+        }
+
+        const shootBtn = document.getElementById('shoot-btn');
+        shootBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault(); if(cutsceneActive || gameState === "gameover") return;
+            initAudio();
+            
+            if(hasBlueShotgun) playBlueShotSound(); else playShotgunSound();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+            if (gameState === "destroy_mask") {
+                let intersects = raycaster.intersectObjects([tutMask, ...spawnedMummiesArray.map(m=>m.children[0])], true);
+                if (intersects.length > 0) {
+                    let hitObj = intersects[0].object;
+                    if (hitObj === tutMask) {
+                        if (player.position.distanceTo(tutGroup.position) > 45) {
+                            document.getElementById('instruction-bar').innerHTML = "⚠️ اقترب أكثر من القناع للتصويب المباشر!";
+                            return;
+                        }
+                        maskHealth--;
+                        if (maskHealth <= 0) {
+                            playScreamSound();
+                            tutGroup.remove(tutMask); isMaskDestroyed = true;
+                            spawnedMummiesArray.forEach(m => scene.remove(m)); spawnedMummiesArray = [];
+                            
+                            djGroup.visible = true;
+                            djGroup.position.set(player.position.x, 0.5, player.position.z + 2);
+
+                            cutsceneActive = true; cutsceneStage = 2;
+                            museumGroup.visible = false;
+                            showDialogue("📡 برج الإذاعة يطلق الترددات الزرقاء على الأرض الخضراء المنفصلة...");
+                        } else {
+                            document.getElementById('instruction-bar').innerHTML = `💥 أصبْتَ القناع! الضربات المتبقية: ${maskHealth}`;
+                        }
+                    } else {
+                        let hitGroup = hitObj.parent;
+                        scene.remove(hitGroup); spawnedMummiesArray = spawnedMummiesArray.filter(m => m !== hitGroup);
+                    }
+                }
+            } else if (gameState === "dj_defense") {
+                let intersects = raycaster.intersectObjects(fireballsArray, true);
+                if (intersects.length > 0) {
+                    let fb = intersects[0].object; fb.userData.blueHits++;
+                    if (fb.userData.blueHits >= 2) {
+                        playShotgunSound(); playExplosionSound(); scene.remove(fb);
+                        fireballsArray = fireballsArray.filter(f => f !== fb);
+                    }
+                }
+            } else if (gameState === "wild_attack" && creatureInJar) {
+                let intersects = raycaster.intersectObjects([tutBody], true);
+                if (intersects.length > 0) {
+                    tutHealth--;
+                    if (tutHealth <= 0) {
+                        playScreamSound();
+                        scene.remove(tutGroup);
+                        clearAllFireballs();
+                        gameState = "rescue_mona";
+                        isMonaFollowing = true;
+
+                        copterGroup.position.set(0, 28, -130);
+                        document.getElementById('instruction-bar').innerHTML = "🏆 سقط توت عنخ آمون ومات! امسك البرطمان واصعد بالحبل الهابط في منتصف الممر!";
+                    } else {
+                        document.getElementById('instruction-bar').innerHTML = `💥 أصبْتَ توت! الصحة المتبقية: ${tutHealth} / 5`;
+                    }
+                }
+            }
+        });
+
+        const dialogueBox = document.getElementById('dialogue-box');
+        const dialogueText = document.getElementById('dialogue-text');
+
+        function showDialogue(text) {
+            dialogueText.innerHTML = text;
+            dialogueBox.style.display = 'block';
+        }
+
+        dialogueBox.addEventListener('click', () => {
+            initAudio();
+            
+            if (gameState === "ending_helicopter" && !isCameraEnteringCabin) {
+                advanceEndingDialogue();
+                return;
+            }
+
+            if (cutsceneStage === 2) {
+                cutsceneStage = 3; 
+                museumGroup.visible = true;
+                copterGroup.visible = true;
+                
+                playHelicopterSound(); playManVoice();
+                showDialogue("🚁 **الرجل الغريب:** أحمد أمسك الشوت جن الأزرق ده دمر بيه الطلقات!");
+                hasBlueShotgun = true; gunBodyMat.color.setHex(0x00ffff); shootBtn.style.borderColor = "#00ffff";
+            } else if (cutsceneStage === 3) {
+                cutsceneStage = 0; 
+                cutsceneActive = false; dialogueBox.style.display = 'none';
+                gameState = "dj_defense"; scene.add(jarGroup);
+                document.getElementById('timer-bar').style.display = 'block';
+                document.getElementById('instruction-bar').innerHTML = "⚡ احمِ الدي جي لمدة دقيقة كاملة!";
+                
+                timerInterval = setInterval(() => {
+                    djDefenseTimer--;
+                    document.getElementById('timer-bar').innerHTML = `حماية الدي جي: ${djDefenseTimer} ثانية | صحة الدي جي: ${djHealth}/5`;
+                    if (djDefenseTimer <= 0) {
+                        clearInterval(timerInterval); document.getElementById('timer-bar').style.display = 'none';
+                        playScreamSound(); gameState = "wild_attack"; scene.add(creatureGroup);
+                        document.getElementById('instruction-bar').innerHTML = "🚨 توت عنخ آمون يصرخ! خذ الكائن الأخضر المضيء وضعه في البرطمان!";
+                    }
+                }, 1000);
+            }
+        });
+
+        const endingDialogues = [
+            "💬 **الرجل الغريب:** إحنا من الـ **FBI**.. ومش لازم تعرف أكتر من كده!",
+            "💬 **أحمد:** إنتوا عايزين مني إيه؟! وتخطفوني ليه؟!",
+            "💬 **الرجل الغريب:** عايزينك في مهمة سرية جداً لإنقاذ العالم!",
+            "💬 **أحمد:** أنا مش عايز مخاطرات تاني! أنا عايز أروح بأمان أنا وأختي!",
+            "💬 **الرجل الغريب (بتهديد):** لو ما جيتش معانا.. مش هتشوف أختك تاني! 😡",
+            "💬 **أحمد (بيأس واستسلام):** ماشي... 😔"
+        ];
+
+        function advanceEndingDialogue() {
+            if (dialogueIndex < endingDialogues.length) {
+                if(dialogueIndex % 2 === 0) playManVoice();
+                showDialogue(endingDialogues[dialogueIndex]);
+                dialogueIndex++;
+            } else {
+                dialogueBox.style.display = 'none';
+                document.getElementById('chapter2-screen').style.display = 'flex';
+                setTimeout(() => { window.location.href = "index.html"; }, 5000);
+            }
+        }
+
+        const container = document.getElementById('joystick-container'); const knob = document.getElementById('joystick-knob');
+        let moveX = 0, moveZ = 0; let joystickTouchId = null; let lookTouchId = null; let prevLookX = 0, prevLookY = 0;
+
+        window.addEventListener('touchstart', (e) => {
+            initAudio();
+            if(cutsceneActive || gameState === "escape_flight" || gameState === "gameover" || gameState === "ending_helicopter") return;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let touch = e.changedTouches[i];
+                if (touch.clientX < window.innerWidth / 2) {
+                    if (container.getBoundingClientRect().left <= touch.clientX && touch.clientX <= container.getBoundingClientRect().right) joystickTouchId = touch.identifier;
+                } else { if (lookTouchId === null) { lookTouchId = touch.identifier; prevLookX = touch.clientX; prevLookY = touch.clientY; } }
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if(cutsceneActive || gameState === "escape_flight" || gameState === "gameover" || gameState === "ending_helicopter") return;
+            for (let i = 0; i < e.touches.length; i++) {
+                let touch = e.touches[i];
+                if (touch.identifier === joystickTouchId) {
+                    const rect = container.getBoundingClientRect(); const cX = rect.left + rect.width/2, cY = rect.top + rect.height/2;
+                    let dX = touch.clientX - cX, dY = touch.clientY - cY; let dist = Math.sqrt(dX*dX + dY*dY); const maxR = rect.width/2 - 10;
+                    if (dist > maxR) { dX = (dX / dist) * maxR; dY = (dY / dist) * maxR; }
+                    knob.style.transform = `translate(${dX}px, ${dY}px)`; moveX = dX / maxR; moveZ = dY / maxR;
+                } else if (touch.identifier === lookTouchId) {
+                    player.yaw -= (touch.clientX - prevLookX) * 0.005; player.pitch -= (touch.clientY - prevLookY) * 0.004;
+                    player.pitch = Math.max(-1.3, Math.min(1.3, player.pitch)); prevLookX = touch.clientX; prevLookY = touch.clientY;
+                }
+            }
+        });
+
+        window.addEventListener('touchend', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                let touch = e.changedTouches[i];
+                if (touch.identifier === joystickTouchId) { joystickTouchId = null; moveX = 0; moveZ = 0; knob.style.transform = 'translate(0px,0px)'; }
+                else if (touch.identifier === lookTouchId) lookTouchId = null;
+            }
+        });
+
+        let isRunning = false;
+        document.getElementById('jump').addEventListener('touchstart', (e) => { e.preventDefault(); if(player.isGrounded) { player.velocityY = 12; player.isGrounded = false; } });
+        document.getElementById('run').addEventListener('touchstart', (e) => { e.preventDefault(); isRunning = true; });
+        document.getElementById('run').addEventListener('touchend', (e) => { e.preventDefault(); isRunning = false; });
+
+        const interactBtn = document.getElementById('interact-btn'); let closestAction = null;
+        interactBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault(); if(!closestAction) return;
+            
+            if(closestAction === 'creature') {
+                creatureInJar = true; scene.remove(creatureGroup);
+                const trappedCreature = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({color: 0x00ff00})); trappedCreature.position.y = 1.1; jarGroup.add(trappedCreature);
+                document.getElementById('instruction-bar').innerHTML = "🧪 وضعْتَ الكائن في البرطمان! أطلق 5 طلقات على توت للقضاء عليه!";
+            } else if(closestAction === 'jar_pickup') {
+                hasJarInHand = true; scene.remove(jarGroup);
+                document.getElementById('instruction-bar').innerHTML = "🏺 أخذت البرطمان! اذهب الآن وامسك بالحبل الهابط في منتصف الممر!";
+            } else if(closestAction === 'rope_escape') {
+                clearAllFireballs();
+                gameState = "escape_flight";
+                
+                monaGroup.visible = false;
+                
+                interactBtn.style.display = 'none';
+                document.getElementById('instruction-bar').style.display = 'none';
+                document.getElementById('control-panel-right').style.display = 'none';
+                document.getElementById('joystick-container').style.display = 'none';
+                document.getElementById('shoot-btn').style.display = 'none';
+                document.getElementById('crosshair').style.display = 'none';
+
+                playHelicopterSound(); playCollapseSound();
+
+                let flightTime = 0;
+                let flightInterval = setInterval(() => {
+                    flightTime += 0.05;
+                    copterGroup.position.y += 0.4;
+                    camera.position.set(copterGroup.position.x, copterGroup.position.y - 12, copterGroup.position.z + 8);
+                    camera.lookAt(0, 0, -150);
+
+                    if (flightTime >= 3.5) {
+                        clearInterval(flightInterval);
+                        
+                        const whiteScreen = document.getElementById('white-fade-screen');
+                        whiteScreen.style.display = 'block';
+                        whiteScreen.style.opacity = '1';
+
+                        setTimeout(() => {
+                            museumGroup.visible = false;
+                            gameState = "ending_helicopter";
+                            isCameraEnteringCabin = true;
+                            
+                            scene.background = new THREE.Color(0x87ceeb);
+                            sunLight.intensity = 1.5;
+
+                            camera.position.set(1000, 5, 1060);
+                            camera.lookAt(1000, 15, 1000);
+
+                            whiteScreen.style.opacity = '0';
+                            setTimeout(() => whiteScreen.style.display = 'none', 800);
+
+                        }, 1000);
+                    }
+                }, 50);
+            }
+        });
+
+        function updateSmoke(dt) {
+            if (gameState !== "escape_flight") return;
+            if (Math.random() < 0.5) {
+                let s = new THREE.Mesh(smokeGeo, smokeMat.clone());
+                s.position.set((Math.random() - 0.5) * 40, 2, -150 + (Math.random() - 0.5) * 50);
+                s.userData = { speedY: 10 + Math.random() * 10, scaleSpeed: 3 + Math.random() * 3 };
+                smokeGroup.add(s);
+            }
+            for (let i = smokeGroup.children.length - 1; i >= 0; i--) {
+                let s = smokeGroup.children[i];
+                s.position.y += s.userData.speedY * dt;
+                s.scale.addScalar(s.userData.scaleSpeed * dt);
+                s.material.opacity -= dt * 0.3;
+                if (s.material.opacity <= 0) smokeGroup.remove(s);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.03);
+            rotor.rotation.y += 15 * dt;
+
+            gunGroup.visible = (!cutsceneActive && gameState !== "escape_flight" && gameState !== "ending_helicopter" && gameState !== "gameover");
+
+            if (gameState === "gameover") {
+                renderer.render(scene, camera); return;
+            }
+            
+            if (gameState === "ending_helicopter") {
+                if (isCameraEnteringCabin) {
+                    camera.position.lerp(new THREE.Vector3(1000, 15.5, 1002.5), dt * 1.5);
+                    camera.lookAt(1000, 15.5, 999);
+                    
+                    if (camera.position.z <= 1003) {
+                        isCameraEnteringCabin = false;
+                        showDialogue("💬 **أحمد:** إنتوا مين؟! ومودينا فين؟!");
+                    }
+                }
+                renderer.render(scene, camera); return;
+            }
+
+            if (cutsceneActive) {
+                if (cutsceneStage === 2) {
+                    camera.position.set(500, 20, 560); camera.lookAt(500, 15, 500);
+                    if (Math.random() < 0.04) { playRadioBeep(); }
+                } else if (cutsceneStage === 3) {
+                    copterGroup.position.z = THREE.MathUtils.lerp(copterGroup.position.z, -130, dt * 2.0);
+                    copterGroup.position.y = THREE.MathUtils.lerp(copterGroup.position.y, 50, dt * 2.0);
+                    camera.position.set(0, 45, -80); camera.lookAt(copterGroup.position);
+                }
+                renderer.render(scene, camera); return;
+            }
+
+            if (gameState === "escape_flight") {
+                updateSmoke(dt);
+                renderer.render(scene, camera); return;
+            }
+
+            if (gameState === "destroy_mask" || gameState === "dj_defense" || gameState === "wild_attack" || gameState === "rescue_mona") {
+                player.velocityY -= 32.0 * dt; player.position.y += player.velocityY * dt;
+                if (player.position.y <= 3) { player.position.y = 3; player.velocityY = 0; player.isGrounded = true; }
+
+                let speed = isRunning ? 9.0 : 5.0;
+                camera.rotation.x = player.pitch; camera.rotation.y = player.yaw;
+
+                if (moveX !== 0 || moveZ !== 0) {
+                    let dirX = Math.sin(player.yaw) * moveZ + Math.sin(player.yaw - Math.PI/2) * -moveX;
+                    let dirZ = Math.cos(player.yaw) * moveZ + Math.cos(player.yaw - Math.PI/2) * -moveX;
+                    
+                    player.position.x = Math.max(-18.5, Math.min(18.5, player.position.x + dirX * speed * dt));
+                    player.position.z = Math.max(-280.0, Math.min(-80.0, player.position.z + dirZ * speed * dt));
+
+                    let footstepTimer = (window._footstepTimer || 0) + dt; window._footstepTimer = footstepTimer;
+                    if (footstepTimer >= (isRunning ? 0.3 : 0.5)) { playFootstepSound(); window._footstepTimer = 0; }
+                }
+                camera.position.copy(player.position);
+
+                if (isMonaFollowing) {
+                    let targetMonaPos = player.position.clone().add(new THREE.Vector3(1.5, -2.5, 1.5));
+                    monaGroup.position.lerp(targetMonaPos, dt * 3.0);
+                }
+            }
+
+            if (gameState === "destroy_mask") {
+                if (spawnedMummiesArray.length < 5 && Math.random() < 0.02) { spawnNormalMummy(); }
+                
+                for (let i = spawnedMummiesArray.length - 1; i >= 0; i--) {
+                    let m = spawnedMummiesArray[i];
+                    let dirToPlayer = new THREE.Vector3().subVectors(player.position, m.position).normalize();
+                    m.position.x += dirToPlayer.x * 3.5 * dt; m.position.z += dirToPlayer.z * 3.5 * dt;
+
+                    let dist2D = Math.hypot(m.position.x - player.position.x, m.position.z - player.position.z);
+                    if (dist2D < 1.8) {
+                        scene.remove(m); spawnedMummiesArray.splice(i, 1); takeDamage();
+                    }
+                }
+            }
+
+            if (gameState === "dj_defense" || gameState === "wild_attack") {
+                fireballTimer += dt;
+                let rate = (gameState === "wild_attack") ? 0.8 : 2.5;
+                if (fireballTimer >= rate) { spawnFireball((gameState === "wild_attack") ? 1.5 : 0.7); fireballTimer = 0; }
+
+                if(gameState === "wild_attack" && !creatureInJar) {
+                    creatureGroup.position.x = Math.sin(clock.getElapsedTime() * 4) * 12;
+                    creatureGroup.position.z = -160 + Math.cos(clock.getElapsedTime() * 3) * 25;
+                    creatureGroup.position.y = 3 + Math.abs(Math.sin(clock.getElapsedTime() * 6)) * 2;
+                }
+
+                for (let i = fireballsArray.length - 1; i >= 0; i--) {
+                    let f = fireballsArray[i]; f.position.addScaledVector(f.userData.direction, f.userData.speed * dt);
+                    
+                    if (f.position.distanceTo(djGroup.position) < 2.0) {
+                        scene.remove(f); fireballsArray.splice(i, 1); playExplosionSound();
+                        if (gameState === "dj_defense") {
+                            djHealth--;
+                            document.getElementById('timer-bar').innerHTML = `حماية الدي جي: ${djDefenseTimer} ثانية | صحة الدي جي: ${djHealth}/5`;
+                            if (djHealth <= 0) triggerGameOver();
+                        }
+                        continue;
+                    }
+
+                    if (f.position.distanceTo(player.position) < 1.8) {
+                        scene.remove(f); fireballsArray.splice(i, 1); takeDamage(); continue;
+                    }
+                    if (f.position.z > -70) { scene.remove(f); fireballsArray.splice(i, 1); }
+                }
+            }
+
+            closestAction = null;
+            if(gameState === "wild_attack" && !creatureInJar && player.position.distanceTo(creatureGroup.position) < 5.0) {
+                closestAction = 'creature'; document.getElementById('interact-label').innerHTML = "🧪 إمساك الكائن الأخضر";
+            } else if(gameState === "rescue_mona" && !hasJarInHand && player.position.distanceTo(jarGroup.position) < 5.0) {
+                closestAction = 'jar_pickup'; document.getElementById('interact-label').innerHTML = "🏺 إمساك البرطمان";
+            } else if(gameState === "rescue_mona" && hasJarInHand && player.position.distanceTo(new THREE.Vector3(0, 0, -130)) < 10.0) {
+                closestAction = 'rope_escape'; document.getElementById('interact-label').innerHTML = "🧗 الإمساك بالحبل والصعود";
+            }
+
+            if(closestAction && gameState !== "escape_flight" && gameState !== "ending_helicopter") { 
+                interactBtn.style.display = "flex"; interactBtn.style.opacity = "1"; interactBtn.style.pointerEvents = "auto"; 
+            } else { 
+                interactBtn.style.opacity = "0.3"; interactBtn.style.pointerEvents = "none"; document.getElementById('interact-label').innerHTML = "تفاعل"; 
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    </script>
+</body>
+</html>
